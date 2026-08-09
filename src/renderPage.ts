@@ -54,6 +54,18 @@ const renderCategories = (categories: Record<string, number>): string => {
     .join('')}</ul>`
 }
 
+/**
+ * Stale means "we have not been able to read this school recently" -- not "this school has not
+ * changed recently". A directory that changes weekly is polled hourly and answers 304 almost
+ * every time; measuring content age here would brand every healthy school stale and make the
+ * one signal that matters useless.
+ */
+const isStale = (record: SchoolRecord, now: Date, staleAfterMs: number): boolean => {
+  if (record.lastError) return true
+  const polled = Date.parse(record.lastPolledAt ?? '')
+  return Number.isNaN(polled) || now.getTime() - polled > staleAfterMs
+}
+
 const renderSchool = (record: SchoolRecord, now: Date, staleAfterMs: number): string => {
   const summary = record.summary
   if (!summary) {
@@ -65,8 +77,7 @@ const renderSchool = (record: SchoolRecord, now: Date, staleAfterMs: number): st
     </article>`
   }
 
-  const updatedAge = Date.parse(record.lastUpdatedAt ?? '')
-  const stale = Number.isNaN(updatedAge) || now.getTime() - updatedAge > staleAfterMs
+  const stale = isStale(record, now, staleAfterMs)
   const note = record.lastError
     ? `<p class="note">Last poll failed: ${escapeHtml(record.lastError)}</p>`
     : ''

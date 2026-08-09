@@ -56,7 +56,7 @@ describe('renderPage', () => {
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
   })
 
-  it('marks a school stale when its data is older than the threshold, with the reason', () => {
+  it('marks a school stale when the last poll failed, and says why', () => {
     const html = renderPage(
       [record({ lastUpdatedAt: '2026-08-01T12:00:00Z', lastError: 'mvhs.example.org answered 503' })],
       { now: NOW },
@@ -65,6 +65,24 @@ describe('renderPage', () => {
     expect(html).toContain('class="school stale"')
     expect(html).toContain('8 days ago')
     expect(html).toContain('Last poll failed: mvhs.example.org answered 503')
+  })
+
+  it('marks a school stale when nothing has polled it for a while', () => {
+    const html = renderPage([record({ lastPolledAt: '2026-08-05T12:00:00Z' })], { now: NOW })
+
+    expect(html).toContain('class="school stale"')
+  })
+
+  // A directory that changes weekly is polled hourly and answers 304 almost every time. Judging
+  // staleness by content age would brand every healthy school stale and make the signal useless.
+  it('does not call a school stale just because its clubs have not changed', () => {
+    const html = renderPage(
+      [record({ lastUpdatedAt: '2026-07-01T12:00:00Z', lastPolledAt: '2026-08-09T11:59:00Z' })],
+      { now: NOW },
+    )
+
+    expect(html).not.toContain('class="school stale"')
+    expect(html).toContain('39 days ago')
   })
 
   // Listed but never read is exactly the case that would otherwise go unnoticed for months.

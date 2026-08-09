@@ -21,10 +21,26 @@ import { SchoolStore } from './store.js'
 const registryPath = () => process.env['HSCLUBS_REGISTRY'] ?? 'registry.json'
 const storePath = () => process.env['HSCLUBS_STORE'] ?? 'data/schools.json'
 
+/**
+ * A misread number here reaches other people's servers: `HSCLUBS_POLL_INTERVAL_MS=1h` is NaN,
+ * which setTimeout treats as 1ms, and the watcher would hammer every school in the registry
+ * because of one typo. Anything that is not a positive finite number falls back, loudly.
+ */
+const positiveNumber = (name: string, fallback: number): number => {
+  const raw = process.env[name]
+  if (raw === undefined || raw.trim() === '') return fallback
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) {
+    console.error(`${name}=${raw} is not a positive number; using ${fallback}`)
+    return fallback
+  }
+  return value
+}
+
 /** Default hourly: this reads a directory that changes weekly. */
-const intervalMs = () => Number(process.env['HSCLUBS_POLL_INTERVAL_MS'] ?? 60 * 60 * 1000)
+const intervalMs = () => positiveNumber('HSCLUBS_POLL_INTERVAL_MS', 60 * 60 * 1000)
 const pageTitle = () => process.env['HSCLUBS_PAGE_TITLE'] ?? 'HS Clubs'
-const pagePort = () => Number(process.env['HSCLUBS_PORT'] ?? 4180)
+const pagePort = () => positiveNumber('HSCLUBS_PORT', 4180)
 const pageHost = () => process.env['HSCLUBS_HOST'] ?? '127.0.0.1'
 
 const loadPollable = async (): Promise<SchoolEntry[]> => pollableSchools(await loadRegistry(registryPath()))
@@ -124,12 +140,25 @@ const serve = async (): Promise<number> => {
     render: async () => renderPage((await SchoolStore.open(storePath())).all(), { title: pageTitle() }),
   })
 
-  await new Promise<void>((resolve) => {
+  const listening = await new Promise<string | null>((resolve) => {
+    // Without an error listener Node rethrows this as an uncaught exception with a stack trace,
+    // and the likeliest cause is the most ordinary one: the operator already has a copy running.
+    server.once('error', (error: NodeJS.ErrnoException) =>
+      resolve(
+        error.code === 'EADDRINUSE'
+          ? `${pageHost()}:${pagePort()} is already in use -- is another copy already serving?`
+          : `Could not listen on ${pageHost()}:${pagePort()}: ${error.message}`,
+      ),
+    )
     server.once('listening', () => {
       console.log(`serving http://${pageHost()}:${pagePort()} from ${storePath()}`)
-      resolve()
+      resolve(null)
     })
   })
+  if (listening) {
+    console.error(listening)
+    return 1
+  }
 
   await new Promise<void>((resolve) => {
     for (const signal of ['SIGINT', 'SIGTERM'] as const) {
