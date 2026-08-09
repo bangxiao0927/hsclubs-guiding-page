@@ -162,6 +162,47 @@ describe('verifySchool', () => {
     })
   })
 
+  // A brief DNS outage, timeout or 5xx proves nothing about ownership. Hiding a verified school
+  // for the default 30-day re-check interval after one local network blip would black out the
+  // whole page at once.
+  it('keeps a previously verified school verified on a transient network failure', async () => {
+    const previouslyVerified = entry({
+      verification: {
+        token: 'one-time-token',
+        state: 'verified',
+        verifiedAt: '2026-07-01T00:00:00Z',
+        lastCheckedAt: '2026-07-01T00:00:00Z',
+        lastError: null,
+      },
+    })
+    const result = await verifySchool(previouslyVerified, {
+      now: at,
+      fetchImpl: (async () => {
+        throw new TypeError('fetch failed', { cause: new Error('getaddrinfo ENOTFOUND') })
+      }) as unknown as typeof fetch,
+    })
+
+    expect(result).toMatchObject({ verified: false, transientFailure: true })
+    expect(result.entry.verification).toMatchObject({
+      state: 'verified',
+      verifiedAt: '2026-07-01T00:00:00Z',
+      lastCheckedAt: '2026-08-09T12:00:00.000Z',
+    })
+  })
+
+  it('keeps a previously verified school verified when the challenge answers 503', async () => {
+    const previouslyVerified = entry({
+      verification: { ...entry().verification, state: 'verified', verifiedAt: '2026-07-01T00:00:00Z' },
+    })
+
+    const result = await verifySchool(previouslyVerified, {
+      fetchImpl: routes(() => new Response('', { status: 503 })),
+    })
+
+    expect(result.transientFailure).toBe(true)
+    expect(result.entry.verification.state).toBe('verified')
+  })
+
   it('stops reading a challenge over the configured size cap', async () => {
     const stream = new ReadableStream<Uint8Array>({
       pull(controller) {

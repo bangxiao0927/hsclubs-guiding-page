@@ -19,7 +19,15 @@ export type FetchResult =
   | { outcome: 'updated'; summary: SchoolSummary; etag: string | null }
   | { outcome: 'not-modified' }
 
-export class SummaryFetchError extends Error {}
+export class SummaryFetchError extends Error {
+  constructor(
+    message: string,
+    /** True when retrying later can reasonably succeed without an operator changing anything. */
+    readonly transient = false,
+  ) {
+    super(message)
+  }
+}
 
 const DEFAULT_TIMEOUT_MS = 10_000
 /** A summary is a few kilobytes; anything near this is a wrong endpoint, not a big school. */
@@ -91,7 +99,15 @@ export const fetchSummary = async (
     signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
   })
 
-  if (response.status === 304) return { outcome: 'not-modified' }
+  if (response.status === 304) {
+    if (!options.etag) {
+      await discard(response)
+      // There is no stored representation for "not modified" to refer to. In verification this
+      // would otherwise bypass the summary body and therefore the slug-agreement check entirely.
+      throw new SummaryFetchError(`${url.host} answered 304 although no ETag was sent`)
+    }
+    return { outcome: 'not-modified' }
+  }
 
   if (response.status >= 300 && response.status < 400) {
     await discard(response)
@@ -101,7 +117,10 @@ export const fetchSummary = async (
   }
   if (!response.ok) {
     await discard(response)
-    throw new SummaryFetchError(`${url.host} answered ${response.status}`)
+    throw new SummaryFetchError(
+      `${url.host} answered ${response.status}`,
+      response.status >= 500 || response.status === 408 || response.status === 429,
+    )
   }
 
   const body = await readBounded(response, maxBytes)

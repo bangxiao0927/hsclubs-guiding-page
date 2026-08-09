@@ -1,7 +1,8 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 
-import { fetchSummary, type FetchOptions } from './fetchSummary.js'
+import { fetchSummary, SummaryFetchError, type FetchOptions } from './fetchSummary.js'
 import type { SchoolEntry } from './registry.js'
+import { SummaryFormatError } from './summary.js'
 
 const CHALLENGE_PATH = '/.well-known/hsclubs-site.txt'
 const DEFAULT_TIMEOUT_MS = 10_000
@@ -16,8 +17,13 @@ export interface VerificationOptions {
 
 export interface VerificationResult {
   entry: SchoolEntry
+  /** True only when both checks succeeded in this attempt. */
   verified: boolean
+  /** The check could not finish, but did not disprove a previous verification. */
+  transientFailure: boolean
 }
+
+class DefinitiveVerificationError extends Error {}
 
 /** 256 bits, encoded for copy/paste into a plain text file. */
 export const issueVerificationToken = (): string => randomBytes(32).toString('base64url')
@@ -35,7 +41,9 @@ const readBoundedText = async (response: Response, maxBytes: number): Promise<st
   const declared = Number(response.headers.get('content-length'))
   if (Number.isFinite(declared) && declared > maxBytes) {
     await discard(response)
-    throw new Error(`challenge declares ${declared} bytes, over the ${maxBytes} cap`)
+    throw new DefinitiveVerificationError(
+      `challenge declares ${declared} bytes, over the ${maxBytes} cap`,
+    )
   }
   if (!response.body) return ''
   const reader = response.body.getReader()
@@ -47,7 +55,9 @@ const readBoundedText = async (response: Response, maxBytes: number): Promise<st
       if (done) break
       if (!value) continue
       total += value.byteLength
-      if (total > maxBytes) throw new Error(`challenge exceeded the ${maxBytes} byte cap`)
+      if (total > maxBytes) {
+        throw new DefinitiveVerificationError(`challenge exceeded the ${maxBytes} byte cap`)
+      }
       chunks.push(value)
     }
   } finally {
@@ -69,18 +79,29 @@ const tokensMatch = (expected: string, actual: string): boolean => {
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
-const failed = (entry: SchoolEntry, checkedAt: string, error: unknown): VerificationResult => ({
-  verified: false,
-  entry: {
-    ...entry,
-    verification: {
-      ...entry.verification,
-      state: 'failing',
-      lastCheckedAt: checkedAt,
-      lastError: error instanceof Error ? error.message : String(error),
+const failed = (entry: SchoolEntry, checkedAt: string, error: unknown): VerificationResult => {
+  const definitive =
+    error instanceof DefinitiveVerificationError ||
+    error instanceof SummaryFormatError ||
+    (error instanceof SummaryFetchError && !error.transient)
+
+  return {
+    verified: false,
+    transientFailure: !definitive,
+    entry: {
+      ...entry,
+      verification: {
+        ...entry.verification,
+        // A DNS outage, timeout or 5xx proves nothing about ownership. Keep a previously
+        // verified school visible and try again later; only a missing/wrong challenge, bad
+        // summary contract, or identity mismatch revokes the proof immediately.
+        state: definitive ? 'failing' : entry.verification.state,
+        lastCheckedAt: checkedAt,
+        lastError: error instanceof Error ? error.message : String(error),
+      },
     },
-  },
-})
+  }
+}
 
 /**
  * Proves that this summary URL belongs to the school the registry says it does:
@@ -98,10 +119,18 @@ export const verifySchool = async (
 ): Promise<VerificationResult> => {
   const checkedAt = (options.now ?? (() => new Date()))().toISOString()
   const token = entry.verification.token
-  if (!token) return failed(entry, checkedAt, 'No verification token has been issued')
+  if (!token) {
+    return failed(
+      entry,
+      checkedAt,
+      new DefinitiveVerificationError('No verification token has been issued'),
+    )
+  }
 
   const url = challengeUrlFor(entry.summaryUrl)
-  if (url.protocol !== 'https:') return failed(entry, checkedAt, 'Challenge URL must be https')
+  if (url.protocol !== 'https:') {
+    return failed(entry, checkedAt, new DefinitiveVerificationError('Challenge URL must be https'))
+  }
 
   try {
     const doFetch = options.fetchImpl ?? fetch
@@ -114,18 +143,25 @@ export const verifySchool = async (
 
     if (response.status >= 300 && response.status < 400) {
       await discard(response)
-      throw new Error(`Challenge redirected (status ${response.status}); redirects are not trusted`)
+      throw new DefinitiveVerificationError(
+        `Challenge redirected (status ${response.status}); redirects are not trusted`,
+      )
     }
     if (!response.ok) {
       await discard(response)
-      throw new Error(`Challenge answered ${response.status}`)
+      if (response.status >= 500 || response.status === 408 || response.status === 429) {
+        throw new Error(`Challenge answered ${response.status}`)
+      }
+      throw new DefinitiveVerificationError(`Challenge answered ${response.status}`)
     }
 
     // A trailing newline is what a text file normally has; no other normalization, because a
     // token embedded in a page or surrounded by other text is not the challenge file requested.
     const actual = (await readBoundedText(response, options.maxBytes ?? DEFAULT_MAX_BYTES))
       .replace(/\r?\n$/, '')
-    if (!tokensMatch(token, actual)) throw new Error('Challenge token did not match')
+    if (!tokensMatch(token, actual)) {
+      throw new DefinitiveVerificationError('Challenge token did not match')
+    }
 
     // Reuse the producer contract and all of its bounds (HTTPS, no redirect, size cap, JSON
     // shape, slug agreement). A challenge alone proves control of a host; the summary check
@@ -137,6 +173,7 @@ export const verifySchool = async (
 
     return {
       verified: true,
+      transientFailure: false,
       entry: {
         ...entry,
         verification: {

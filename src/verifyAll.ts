@@ -1,10 +1,15 @@
 import type { SchoolEntry } from './registry.js'
-import { verifySchool, type VerificationOptions } from './verifySchool.js'
+import {
+  verifySchool,
+  type VerificationOptions,
+  type VerificationResult,
+} from './verifySchool.js'
 
 export interface VerificationReport {
   checked: number
   verified: number
   failing: number
+  transientFailures: number
   entries: SchoolEntry[]
 }
 
@@ -17,11 +22,14 @@ export interface VerificationReport {
  */
 export const verifyAllSchools = async (
   entries: SchoolEntry[],
-  options: VerificationOptions & { onSchool?: (entry: SchoolEntry) => void } = {},
+  options: VerificationOptions & {
+    onSchool?: (result: VerificationResult) => void | Promise<void>
+  } = {},
 ): Promise<VerificationReport> => {
   let checked = 0
   let verified = 0
   let failing = 0
+  let transientFailures = 0
 
   const updated: SchoolEntry[] = []
   for (const entry of entries) {
@@ -34,9 +42,10 @@ export const verifyAllSchools = async (
     const result = await verifySchool(entry, options)
     updated.push(result.entry)
     if (result.verified) verified += 1
+    else if (result.transientFailure) transientFailures += 1
     else failing += 1
-    options.onSchool?.(result.entry)
+    await options.onSchool?.(result)
   }
 
-  return { checked, verified, failing, entries: updated }
+  return { checked, verified, failing, transientFailures, entries: updated }
 }

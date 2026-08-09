@@ -1,5 +1,6 @@
 import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
-import { saveRegistry } from './registry.js'
+import { saveRegistry, withRegistryLock } from './registry.js'
+import { pageRecords } from './pageData.js'
 import { pollAllSchools } from './pollAll.js'
 import { pollSchool } from './pollSchool.js'
 import { renderPage } from './renderPage.js'
@@ -146,7 +147,13 @@ const serve = async (): Promise<number> => {
   const server = createPageServer({
     port: pagePort(),
     host: pageHost(),
-    render: async () => renderPage((await SchoolStore.open(storePath())).all(), { title: pageTitle() }),
+    render: async () => {
+      const [entries, store] = await Promise.all([
+        loadRegistry(registryPath()),
+        SchoolStore.open(storePath()),
+      ])
+      return renderPage(pageRecords(entries, store), { title: pageTitle() })
+    },
   })
 
   const listening = await new Promise<string | null>((resolve) => {
@@ -191,58 +198,82 @@ const requireRegistryEntry = async (slug: string): Promise<{ entries: SchoolEntr
 }
 
 const issueToken = async (slug: string): Promise<number> => {
-  const { entries, index } = await requireRegistryEntry(slug)
-  const current = entries[index]!
-  const token = issueVerificationToken()
-  entries[index] = {
-    ...current,
-    verification: {
-      ...current.verification,
-      token,
-      state: 'pending',
-      verifiedAt: null,
-      lastCheckedAt: null,
-      lastError: null,
-    },
-  }
-  await saveRegistry(registryPath(), entries)
+  return withRegistryLock(registryPath(), async () => {
+    const { entries, index } = await requireRegistryEntry(slug)
+    const current = entries[index]!
+    const token = issueVerificationToken()
+    entries[index] = {
+      ...current,
+      verification: {
+        ...current.verification,
+        token,
+        state: 'pending',
+        verifiedAt: null,
+        lastCheckedAt: null,
+        lastError: null,
+      },
+    }
+    await saveRegistry(registryPath(), entries)
 
-  console.log(`${slug}: new verification token issued`)
-  console.log(`Publish exactly this line at ${challengeUrlFor(current.summaryUrl)}`)
-  console.log(token)
-  return 0
+    console.log(`${slug}: new verification token issued`)
+    console.log(`Publish exactly this line at ${challengeUrlFor(current.summaryUrl)}`)
+    console.log(token)
+    return 0
+  })
 }
 
 const verifyOne = async (slug: string): Promise<number> => {
-  const { entries, index } = await requireRegistryEntry(slug)
-  const result = await verifySchool(entries[index]!)
-  entries[index] = result.entry
-  await saveRegistry(registryPath(), entries)
+  return withRegistryLock(registryPath(), async () => {
+    const { entries, index } = await requireRegistryEntry(slug)
+    const result = await verifySchool(entries[index]!)
+    entries[index] = result.entry
+    await saveRegistry(registryPath(), entries)
 
-  if (result.verified) {
-    console.log(`${slug}: verified`)
-    return 0
-  }
-  console.error(`${slug}: verification failed -- ${result.entry.verification.lastError}`)
-  return 1
+    if (result.verified) {
+      console.log(`${slug}: verified`)
+      return 0
+    }
+    console.error(
+      `${slug}: ${result.transientFailure ? 'check could not finish' : 'verification failed'} -- ${
+        result.entry.verification.lastError
+      }`,
+    )
+    return 1
+  })
 }
 
 const verifyOnePass = async (): Promise<number> => {
-  const entries = await loadRegistry(registryPath())
-  const report = await verifyAllSchools(entries, {
-    onSchool: (entry) =>
-      console.log(
-        `${entry.slug}: ${entry.verification.state}${
-          entry.verification.lastError ? ` -- ${entry.verification.lastError}` : ''
-        }`,
-      ),
+  return withRegistryLock(registryPath(), async () => {
+    const entries = await loadRegistry(registryPath())
+    const report = await verifyAllSchools(entries, {
+      // Persist as each school finishes, just like polling: a monthly pass interrupted halfway
+      // by sleep or shutdown keeps every verification it already completed. The registry lock
+      // prevents another command from interleaving a write with these snapshots.
+      onSchool: async (result) => {
+        const entry = result.entry
+        const index = entries.findIndex((current) => current.slug === entry.slug)
+        if (index >= 0) entries[index] = entry
+        await saveRegistry(registryPath(), entries)
+        const outcome = result.verified
+          ? 'verified'
+          : result.transientFailure
+            ? `check incomplete, keeping ${entry.verification.state}`
+            : 'failing'
+        console.log(
+          `${entry.slug}: ${outcome}${
+            entry.verification.lastError ? ` -- ${entry.verification.lastError}` : ''
+          }`,
+        )
+      },
+    })
+    console.log(
+      `verification pass done: ${report.verified} verified, ${report.failing} failing, ${
+        report.transientFailures
+      } transient failures, ${report.checked} checked`,
+    )
+    // Like poll:all, per-school failure is data in the registry, not a broken job.
+    return 0
   })
-  await saveRegistry(registryPath(), report.entries)
-  console.log(
-    `verification pass done: ${report.verified} verified, ${report.failing} failing, ${report.checked} checked`,
-  )
-  // Like poll:all, per-school failure is data in the registry, not a broken job.
-  return 0
 }
 
 const verifyWatch = async (): Promise<number> => {

@@ -67,4 +67,38 @@ describe('verifyAllSchools', () => {
     expect(report).toMatchObject({ checked: 0, verified: 0, failing: 0 })
     expect(report.entries[0]).toEqual(hidden)
   })
+
+  it('counts a transient check separately without demoting a verified school', async () => {
+    const verified = entry('alpha')
+    verified.verification.state = 'verified'
+    verified.verification.verifiedAt = '2026-07-01T00:00:00Z'
+
+    const report = await verifyAllSchools([verified], {
+      fetchImpl: (async () => {
+        throw new TypeError('fetch failed')
+      }) as unknown as typeof fetch,
+    })
+
+    expect(report).toMatchObject({ checked: 1, verified: 0, failing: 0, transientFailures: 1 })
+    expect(report.entries[0]?.verification.state).toBe('verified')
+  })
+
+  // The CLI saves in this callback. Awaiting it means a pass cannot start the next network call
+  // (or finish) before the result already learned is safely on disk.
+  it('awaits the per-school persistence hook', async () => {
+    let persisted = false
+    const report = await verifyAllSchools([entry('alpha')], {
+      fetchImpl: (async (url: URL) =>
+        url.pathname.includes('.well-known')
+          ? new Response('alpha-token')
+          : new Response(JSON.stringify(summary('alpha')))) as unknown as typeof fetch,
+      onSchool: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        persisted = true
+      },
+    })
+
+    expect(report.verified).toBe(1)
+    expect(persisted).toBe(true)
+  })
 })

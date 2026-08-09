@@ -53,6 +53,17 @@ describe('fetchSummary', () => {
     expect(result).toEqual({ outcome: 'not-modified' })
   })
 
+  // There is no stored representation for an unconditional 304 to refer to. More importantly,
+  // verification needs the body to check slug agreement; accepting this would let a site prove
+  // the token and then bypass the identity half of verification entirely.
+  it('rejects an unsolicited 304 when no etag was sent', async () => {
+    await expect(
+      fetchSummary('https://mvhs.example.org/api/summary', 'mvhs', {
+        fetchImpl: (async () => new Response(null, { status: 304 })) as unknown as typeof fetch,
+      }),
+    ).rejects.toThrow(/no ETag was sent/)
+  })
+
   // The URL comes from the registry, so this is a server-side fetch of an address the code did
   // not choose. A redirect would let a registered site point it anywhere, including inside this
   // machine's own network.

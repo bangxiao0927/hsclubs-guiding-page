@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 /**
@@ -111,6 +111,15 @@ export const parseRegistry = (raw: unknown): SchoolEntry[] => {
 const withoutByteOrderMark = (contents: string): string =>
   contents.charCodeAt(0) === 0xfeff ? contents.slice(1) : contents
 
+const readRegistryDocument = async (path: string): Promise<Record<string, unknown>> => {
+  const contents = await readFile(path, 'utf8')
+  const raw = JSON.parse(withoutByteOrderMark(contents)) as unknown
+  if (!isRecord(raw) || !Array.isArray(raw['schools'])) {
+    throw new RegistryError('registry must be a JSON object with a schools array')
+  }
+  return raw
+}
+
 export const loadRegistry = async (path: string): Promise<SchoolEntry[]> => {
   let contents: string
   try {
@@ -137,8 +146,71 @@ export const loadRegistry = async (path: string): Promise<SchoolEntry[]> => {
 export const saveRegistry = async (path: string, entries: SchoolEntry[]): Promise<void> => {
   await mkdir(dirname(path), { recursive: true })
   const temporary = join(dirname(path), `.${Date.now()}-${process.pid}.registry.tmp`)
-  await writeFile(temporary, `${JSON.stringify({ schools: entries }, null, 2)}\n`, 'utf8')
-  await rename(temporary, path)
+  try {
+    // Preserve operator annotations and fields from a newer version of this tool. Verification
+    // owns only the parsed fields it changes; serializing the model alone would erase the
+    // `_comment` block the example file itself ships, plus any contact notes an operator added.
+    const original = await readRegistryDocument(path)
+    const originalSchools = original['schools'] as unknown[]
+    const bySlug = new Map(
+      originalSchools
+        .filter(isRecord)
+        .filter((school) => typeof school['slug'] === 'string')
+        .map((school) => [school['slug'] as string, school]),
+    )
+    const schools = entries.map((entry) => {
+      const before = bySlug.get(entry.slug) ?? {}
+      const beforeVerification = isRecord(before['verification']) ? before['verification'] : {}
+      return {
+        ...before,
+        ...entry,
+        verification: { ...beforeVerification, ...entry.verification },
+      }
+    })
+    await writeFile(
+      temporary,
+      `${JSON.stringify({ ...original, schools }, null, 2)}\n`,
+      'utf8',
+    )
+    await rename(temporary, path)
+  } finally {
+    await rm(temporary, { force: true }).catch(() => undefined)
+  }
+}
+
+/**
+ * Serializes registry read-modify-write operations across CLI processes.
+ *
+ * `verify:all` spends seconds on network I/O after reading the file. Without a lock, issuing a
+ * new token or toggling `listed` during that pass is silently overwritten by the old snapshot
+ * when the pass saves. A directory creation is atomic on Windows and POSIX; failing fast is
+ * safer than waiting behind an operator command whose duration is unknown.
+ */
+export const withRegistryLock = async <T>(path: string, operation: () => Promise<T>): Promise<T> => {
+  const lock = `${path}.lock`
+  await mkdir(dirname(path), { recursive: true })
+  try {
+    await mkdir(lock)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'EEXIST') {
+      throw new RegistryError(
+        `The registry is busy (${lock} exists). If no verify command is running, remove that stale lock directory.`,
+      )
+    }
+    throw error
+  }
+
+  try {
+    await writeFile(
+      join(lock, 'owner.json'),
+      `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() })}\n`,
+      'utf8',
+    )
+    return await operation()
+  } finally {
+    await rm(lock, { recursive: true, force: true })
+  }
 }
 
 /** Schools this page may poll and show: verified, and not switched off by the operator. */

@@ -35,8 +35,12 @@ configuration) and back it up like any other operational data.
 - `summaryUrl` is the only address this repo ever fetches for that school.
 - `state` is `pending`, `verified`, or `failing`. Only `verified` schools are shown.
 - `verifiedAt` is the last successful proof; `lastCheckedAt` says when the latest attempt ran,
-  and `lastError` says why that attempt failed. A failure keeps the old successful timestamp for
-  history but changes `state` immediately, so the school stops being polled and listed.
+  and `lastError` says why that attempt failed. A **definitive** failure (challenge removed or
+  wrong, redirect, bad summary shape, slug mismatch) keeps the old successful timestamp for
+  history but changes `state` immediately, so the school stops being polled and listed. A
+  transient failure (DNS, timeout, 5xx, 408/429) proves nothing about ownership: a previously
+  verified school stays verified and the error is recorded for the next pass. One local network
+  blip must not hide every school for the default 30-day interval.
 - `listed` is the operator's own switch: set it false to stop guiding a school without deleting
   its history.
 
@@ -63,6 +67,13 @@ npm run verify:watch          # one pass now, then every 30 days by default
 
 `HSCLUBS_VERIFY_INTERVAL_MS` changes the interval. A bad numeric value falls back loudly rather
 than becoming a hot loop against school servers.
+
+Only one verification command may mutate the registry at a time. The tooling creates
+`registry.json.lock` around the complete read/check/write operation; another command fails with
+a clear "registry is busy" message instead of overwriting a token issued while a long pass was
+in flight. A crash can leave the lock directory behind; if no verification command is running,
+remove it manually. Polling and serving do not take this lock because they never write the
+registry.
 
 Both checks re-run on a schedule (monthly is plenty). A school that stops answering, or whose
 challenge file disappears, moves to `failing` and drops off the page -- it is not deleted, so an

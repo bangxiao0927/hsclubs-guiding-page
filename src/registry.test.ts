@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -10,6 +10,7 @@ import {
   pollableSchools,
   RegistryError,
   saveRegistry,
+  withRegistryLock,
 } from './registry.js'
 
 const entry = (overrides: Record<string, unknown> = {}) => ({
@@ -121,5 +122,51 @@ describe('loadRegistry', () => {
       lastCheckedAt: '2026-08-09T12:00:00Z',
       lastError: 'Challenge answered 404',
     })
+  })
+
+  it('preserves top-level and per-school fields it does not understand', async () => {
+    const original = {
+      _comment: ['operator note'],
+      futureTopLevel: { version: 2 },
+      schools: [
+        {
+          ...entry(),
+          contactNote: 'Talk to the activities office',
+          verification: { ...entry().verification, futureProof: 'keep me' },
+        },
+      ],
+    }
+    const path = await write(JSON.stringify(original))
+    const entries = await loadRegistry(path)
+    entries[0]!.verification.lastError = 'temporary error'
+
+    await saveRegistry(path, entries)
+
+    const saved = JSON.parse(await readFile(path, 'utf8')) as typeof original
+    expect(saved._comment).toEqual(['operator note'])
+    expect(saved.futureTopLevel).toEqual({ version: 2 })
+    expect(saved.schools[0]?.contactNote).toBe('Talk to the activities office')
+    expect(saved.schools[0]?.verification.futureProof).toBe('keep me')
+  })
+
+  it('allows one registry mutation at a time and removes the lock afterwards', async () => {
+    const path = await write(JSON.stringify({ schools: [entry()] }))
+    let release!: () => void
+    let entered!: () => void
+    const operationEntered = new Promise<void>((resolve) => (entered = resolve))
+    const held = withRegistryLock(
+      path,
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+          entered()
+        }),
+    )
+    await operationEntered
+
+    await expect(withRegistryLock(path, async () => undefined)).rejects.toThrow(/registry is busy/)
+    release()
+    await held
+    await expect(withRegistryLock(path, async () => 'ok')).resolves.toBe('ok')
   })
 })
