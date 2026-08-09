@@ -12,6 +12,10 @@
     "poll:all": "tsx src/cli.ts all",
     "watch": "tsx src/cli.ts watch",
     "serve": "tsx src/cli.ts serve",
+    "verify:issue": "tsx src/cli.ts verify:issue",
+    "verify": "tsx src/cli.ts verify",
+    "verify:all": "tsx src/cli.ts verify:all",
+    "verify:watch": "tsx src/cli.ts verify:watch",
     "test": "vitest --run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

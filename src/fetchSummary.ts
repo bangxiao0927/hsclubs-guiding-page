@@ -1,3 +1,4 @@
+import { discardResponse, readBoundedText } from './boundedResponse.js'
 import { parseSummary, type SchoolSummary } from './summary.js'
 
 /**
@@ -19,53 +20,19 @@ export type FetchResult =
   | { outcome: 'updated'; summary: SchoolSummary; etag: string | null }
   | { outcome: 'not-modified' }
 
-export class SummaryFetchError extends Error {}
+export class SummaryFetchError extends Error {
+  constructor(
+    message: string,
+    /** True when retrying later can reasonably succeed without an operator changing anything. */
+    readonly transient = false,
+  ) {
+    super(message)
+  }
+}
 
 const DEFAULT_TIMEOUT_MS = 10_000
 /** A summary is a few kilobytes; anything near this is a wrong endpoint, not a big school. */
 const DEFAULT_MAX_BYTES = 256 * 1024
-
-const readBounded = async (response: Response, maxBytes: number): Promise<string> => {
-  const declared = Number(response.headers.get('content-length'))
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    await discard(response)
-    throw new SummaryFetchError(`Response declares ${declared} bytes, over the ${maxBytes} cap`)
-  }
-  if (!response.body) return ''
-
-  const reader = response.body.getReader()
-  const chunks: Uint8Array[] = []
-  let total = 0
-  try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      if (!value) continue
-      total += value.byteLength
-      // Checked while reading, not after: a Content-Length can lie, or be absent entirely on a
-      // chunked response, and the point of the cap is to stop reading rather than to complain
-      // once the memory is already gone.
-      if (total > maxBytes) {
-        throw new SummaryFetchError(`Response exceeded the ${maxBytes} byte cap`)
-      }
-      chunks.push(value)
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined)
-  }
-  return Buffer.concat(chunks).toString('utf8')
-}
-
-/**
- * Releases a body this function is not going to read.
- *
- * An abandoned body keeps its connection out of the pool until it is garbage collected, so a
- * school that answers 503 (or an oversized body) on every poll would leak sockets in the
- * long-running poller Phase 2 turns this into.
- */
-const discard = async (response: Response): Promise<void> => {
-  await response.body?.cancel().catch(() => undefined)
-}
 
 export const fetchSummary = async (
   summaryUrl: string,
@@ -91,20 +58,34 @@ export const fetchSummary = async (
     signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
   })
 
-  if (response.status === 304) return { outcome: 'not-modified' }
+  if (response.status === 304) {
+    if (!options.etag) {
+      await discardResponse(response)
+      // There is no stored representation for "not modified" to refer to. In verification this
+      // would otherwise bypass the summary body and therefore the slug-agreement check entirely.
+      throw new SummaryFetchError(`${url.host} answered 304 although no ETag was sent`)
+    }
+    return { outcome: 'not-modified' }
+  }
 
   if (response.status >= 300 && response.status < 400) {
-    await discard(response)
+    await discardResponse(response)
     throw new SummaryFetchError(
       `Refusing to follow a redirect from ${url.host} (status ${response.status})`,
     )
   }
   if (!response.ok) {
-    await discard(response)
-    throw new SummaryFetchError(`${url.host} answered ${response.status}`)
+    await discardResponse(response)
+    throw new SummaryFetchError(
+      `${url.host} answered ${response.status}`,
+      response.status >= 500 || response.status === 408 || response.status === 429,
+    )
   }
 
-  const body = await readBounded(response, maxBytes)
+  const body = await readBoundedText(response, maxBytes, {
+    label: 'Response',
+    error: (message) => new SummaryFetchError(message),
+  })
   let parsed: unknown
   try {
     parsed = JSON.parse(body)

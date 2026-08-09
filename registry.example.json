@@ -11,6 +11,8 @@
       "verification": {
         "token": "replace-with-a-one-time-token",
         "verifiedAt": null,
+        "lastCheckedAt": null,
+        "lastError": null,
         "state": "pending"
       },
       "listed": true

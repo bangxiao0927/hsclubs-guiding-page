@@ -11,7 +11,7 @@ import { SchoolStore } from './store.js'
 const school = (slug: string, host = `${slug}.example.org`): SchoolEntry => ({
   slug,
   summaryUrl: `https://${host}/api/summary`,
-  verification: { token: 't', verifiedAt: null, state: 'verified' },
+  verification: { token: 't', verifiedAt: null, lastCheckedAt: null, lastError: null, state: 'verified' },
   listed: true,
 })
 

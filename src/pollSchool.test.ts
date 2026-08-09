@@ -7,7 +7,13 @@ import { emptyRecord, type SchoolRecord } from './store.js'
 const school: SchoolEntry = {
   slug: 'mvhs',
   summaryUrl: 'https://mvhs.example.org/api/summary',
-  verification: { token: 'tok', verifiedAt: null, state: 'verified' },
+  verification: {
+    token: 'tok',
+    verifiedAt: null,
+    lastCheckedAt: null,
+    lastError: null,
+    state: 'verified',
+  },
   listed: true,
 }
 

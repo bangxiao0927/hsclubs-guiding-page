@@ -2,6 +2,11 @@
 # tracked -- see docs/REGISTRY.md.
 registry.json
 registry.local.json
+# Verification writes these beside the registry. Both can survive a hard crash, and the temp
+# file is a full registry copy with tokens, so neither may ever appear in `git add -A`.
+registry.json.lock/
+registry.local.json.lock/
+*.registry.tmp
 
 # Anything pulled from a school site, and anything the job writes while running.
 /data/

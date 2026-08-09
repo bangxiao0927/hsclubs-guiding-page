@@ -35,8 +35,8 @@ Consequences worth knowing before writing any code here:
 
 ## Status
 
-Phases 1-3 of [`docs/ROADMAP.md`](docs/ROADMAP.md): it reads every school on a schedule and
-serves the page. Next is verification tooling (Phase 4).
+Phases 1-4 of [`docs/ROADMAP.md`](docs/ROADMAP.md): it reads every school on a schedule, serves
+the page, and verifies that a summary URL belongs to the school it claims to be.
 
 ## Running it
 
@@ -48,12 +48,18 @@ npm run poll -- mvhs   # one school, once
 npm run poll:all       # every listed, verified school, once
 npm run watch          # a pass now, then every HSCLUBS_POLL_INTERVAL_MS (1h default)
 npm run serve          # the page on http://127.0.0.1:4180
+
+npm run verify:issue -- mvhs  # issue and print a one-time origin challenge token
+npm run verify -- mvhs        # check one school's challenge + summary identity
+npm run verify:all            # check every listed school once
+npm run verify:watch          # check now, then every HSCLUBS_VERIFY_INTERVAL_MS (30d default)
 ```
 
 `registry.json` and `data/` are gitignored. Everything is configurable by environment variable:
 `HSCLUBS_REGISTRY`, `HSCLUBS_STORE`, `HSCLUBS_POLL_INTERVAL_MS`, `HSCLUBS_PORT`, `HSCLUBS_HOST`,
-`HSCLUBS_PAGE_TITLE`. The server binds to localhost unless told otherwise: this is a private page
-on a personal machine, and answering the whole network is not something to turn on by accident.
+`HSCLUBS_PAGE_TITLE`, `HSCLUBS_VERIFY_INTERVAL_MS`. The server binds to localhost unless told
+otherwise: this is a private page on a personal machine, and answering the whole network is not
+something to turn on by accident.
 
 What a poll does: fetch that school's `/api/summary` with the stored `ETag`, and record the
 result. An unchanged school answers `304` and nothing is rewritten. A school that is down keeps

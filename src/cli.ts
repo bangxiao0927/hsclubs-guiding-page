@@ -1,10 +1,14 @@
 import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
+import { saveRegistry, withRegistryLock } from './registry.js'
+import { pageRecords } from './pageData.js'
 import { pollAllSchools } from './pollAll.js'
 import { pollSchool } from './pollSchool.js'
 import { renderPage } from './renderPage.js'
 import { runOnInterval } from './schedule.js'
 import { createPageServer } from './serve.js'
 import { SchoolStore } from './store.js'
+import { verifyAllSchools } from './verifyAll.js'
+import { challengeUrlFor, issueVerificationToken, verifySchool } from './verifySchool.js'
 
 /**
  * The operator's entry point (docs/ROADMAP.md).
@@ -13,6 +17,10 @@ import { SchoolStore } from './store.js'
  *   npm run poll:all         every listed, verified school, once
  *   npm run watch            every school, now and then on an interval
  *   npm run serve            the page, rendered from the store on each request
+ *   npm run verify:issue -- <slug>   issue a one-time origin challenge token
+ *   npm run verify -- <slug>         check one school's challenge + summary identity
+ *   npm run verify:all               re-check every listed school once
+ *   npm run verify:watch             re-check now, then monthly by default
  *
  * Registry path from HSCLUBS_REGISTRY (default ./registry.json), store path from HSCLUBS_STORE
  * (default ./data/schools.json). Both are gitignored: the registry carries tokens, the store
@@ -42,6 +50,8 @@ const intervalMs = () => positiveNumber('HSCLUBS_POLL_INTERVAL_MS', 60 * 60 * 10
 const pageTitle = () => process.env['HSCLUBS_PAGE_TITLE'] ?? 'HS Clubs'
 const pagePort = () => positiveNumber('HSCLUBS_PORT', 4180)
 const pageHost = () => process.env['HSCLUBS_HOST'] ?? '127.0.0.1'
+const verificationIntervalMs = () =>
+  positiveNumber('HSCLUBS_VERIFY_INTERVAL_MS', 30 * 24 * 60 * 60 * 1000)
 
 const loadPollable = async (): Promise<SchoolEntry[]> => pollableSchools(await loadRegistry(registryPath()))
 
@@ -137,7 +147,13 @@ const serve = async (): Promise<number> => {
   const server = createPageServer({
     port: pagePort(),
     host: pageHost(),
-    render: async () => renderPage((await SchoolStore.open(storePath())).all(), { title: pageTitle() }),
+    render: async () => {
+      const [entries, store] = await Promise.all([
+        loadRegistry(registryPath()),
+        SchoolStore.open(storePath()),
+      ])
+      return renderPage(pageRecords(entries, store), { title: pageTitle() })
+    },
   })
 
   const listening = await new Promise<string | null>((resolve) => {
@@ -171,8 +187,120 @@ const serve = async (): Promise<number> => {
   return 0
 }
 
+const requireRegistryEntry = async (slug: string): Promise<{ entries: SchoolEntry[]; index: number }> => {
+  const entries = await loadRegistry(registryPath())
+  const index = entries.findIndex((entry) => entry.slug === slug)
+  if (index < 0) {
+    const known = entries.map((entry) => entry.slug).join(', ') || '(none)'
+    throw new Error(`No school with slug "${slug}". Known slugs: ${known}`)
+  }
+  return { entries, index }
+}
+
+const issueToken = async (slug: string): Promise<number> => {
+  return withRegistryLock(registryPath(), async () => {
+    const { entries, index } = await requireRegistryEntry(slug)
+    const current = entries[index]!
+    const token = issueVerificationToken()
+    entries[index] = {
+      ...current,
+      verification: {
+        ...current.verification,
+        token,
+        state: 'pending',
+        verifiedAt: null,
+        lastCheckedAt: null,
+        lastError: null,
+      },
+    }
+    await saveRegistry(registryPath(), entries)
+
+    console.log(`${slug}: new verification token issued`)
+    console.log(`Publish exactly this line at ${challengeUrlFor(current.summaryUrl)}`)
+    console.log(token)
+    return 0
+  })
+}
+
+const verifyOne = async (slug: string): Promise<number> => {
+  return withRegistryLock(registryPath(), async () => {
+    const { entries, index } = await requireRegistryEntry(slug)
+    const result = await verifySchool(entries[index]!)
+    entries[index] = result.entry
+    await saveRegistry(registryPath(), entries)
+
+    if (result.verified) {
+      console.log(`${slug}: verified`)
+      return 0
+    }
+    console.error(
+      `${slug}: ${result.transientFailure ? 'check could not finish' : 'verification failed'} -- ${
+        result.entry.verification.lastError
+      }`,
+    )
+    return 1
+  })
+}
+
+const verifyOnePass = async (): Promise<number> => {
+  return withRegistryLock(registryPath(), async () => {
+    const entries = await loadRegistry(registryPath())
+    const report = await verifyAllSchools(entries, {
+      // Persist as each school finishes, just like polling: a monthly pass interrupted halfway
+      // by sleep or shutdown keeps every verification it already completed. The registry lock
+      // prevents another command from interleaving a write with these snapshots.
+      onSchool: async (result) => {
+        const entry = result.entry
+        const index = entries.findIndex((current) => current.slug === entry.slug)
+        if (index >= 0) entries[index] = entry
+        await saveRegistry(registryPath(), entries)
+        const outcome = result.verified
+          ? 'verified'
+          : result.transientFailure
+            ? `check incomplete, keeping ${entry.verification.state}`
+            : 'failing'
+        console.log(
+          `${entry.slug}: ${outcome}${
+            entry.verification.lastError ? ` -- ${entry.verification.lastError}` : ''
+          }`,
+        )
+      },
+    })
+    console.log(
+      `verification pass done: ${report.verified} verified, ${report.failing} failing, ${
+        report.transientFailures
+      } transient failures, ${report.checked} checked`,
+    )
+    // Like poll:all, per-school failure is data in the registry, not a broken job.
+    return 0
+  })
+}
+
+const verifyWatch = async (): Promise<number> => {
+  const controller = new AbortController()
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.on(signal, () => controller.abort())
+  }
+  const interval = verificationIntervalMs()
+  console.log(`re-verifying ${registryPath()} every ${Math.round(interval / 86_400_000)} days`)
+
+  await runOnInterval(
+    async () => {
+      await verifyOnePass()
+    },
+    {
+      intervalMs: interval,
+      signal: controller.signal,
+      onError: (error) =>
+        console.error(`verification pass failed: ${error instanceof Error ? error.message : String(error)}`),
+    },
+  )
+  return 0
+}
+
 const main = async (): Promise<number> => {
   const command = process.argv[2]
+  const argument = process.argv[3]
   switch (command) {
     case 'all':
       return runOnePass()
@@ -180,9 +308,19 @@ const main = async (): Promise<number> => {
       return watch()
     case 'serve':
       return serve()
+    case 'verify:issue':
+      if (!argument) throw new Error('Usage: npm run verify:issue -- <slug>')
+      return issueToken(argument)
+    case 'verify':
+      if (!argument) throw new Error('Usage: npm run verify -- <slug>')
+      return verifyOne(argument)
+    case 'verify:all':
+      return verifyOnePass()
+    case 'verify:watch':
+      return verifyWatch()
     case undefined:
       console.error(
-        'Usage: npm run poll -- <slug> | npm run poll:all | npm run watch | npm run serve',
+        'Usage: npm run poll -- <slug> | npm run poll:all | npm run watch | npm run serve | npm run verify:*',
       )
       return 2
     default:
