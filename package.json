@@ -9,6 +9,9 @@
   },
   "scripts": {
     "poll": "tsx src/cli.ts",
+    "poll:all": "tsx src/cli.ts all",
+    "watch": "tsx src/cli.ts watch",
+    "serve": "tsx src/cli.ts serve",
     "test": "vitest --run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

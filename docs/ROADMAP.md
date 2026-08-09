@@ -3,7 +3,7 @@
 Small on purpose. This repo exists to show a handful of school sites on one page; every feature
 it does not have is a feature nobody has to maintain.
 
-## Phase 1 - Read one school
+## Phase 1 - Read one school (done)
 
 - Load the registry file.
 - Fetch one verified school's `/api/summary` with the safety bounds in
@@ -12,7 +12,7 @@ it does not have is a feature nobody has to maintain.
 
 Exit check: running it twice against an unchanged school produces one `200` and one `304`.
 
-## Phase 2 - Read every school on a schedule
+## Phase 2 - Read every school on a schedule (done)
 
 - Poll each verified school hourly, conditionally, one at a time.
 - A slow or broken school affects only its own entry.
@@ -21,7 +21,7 @@ Exit check: running it twice against an unchanged school produces one `200` and 
 Exit check: with one school pointed at a dead host, the others still update and the page says
 which one is stale.
 
-## Phase 3 - The page
+## Phase 3 - The page (done)
 
 - One list: school name, address, club count, category counts, when it was last updated.
 - Link out to each school site.

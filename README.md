@@ -35,24 +35,36 @@ Consequences worth knowing before writing any code here:
 
 ## Status
 
-Phase 1 of [`docs/ROADMAP.md`](docs/ROADMAP.md): it can read one school. The next phases are the
-scheduler and the page itself.
+Phases 1-3 of [`docs/ROADMAP.md`](docs/ROADMAP.md): it reads every school on a schedule and
+serves the page. Next is verification tooling (Phase 4).
 
 ## Running it
 
 ```bash
 npm install
 cp registry.example.json registry.json   # then edit: real URL, token, state
-npm run poll -- mvhs
+
+npm run poll -- mvhs   # one school, once
+npm run poll:all       # every listed, verified school, once
+npm run watch          # a pass now, then every HSCLUBS_POLL_INTERVAL_MS (1h default)
+npm run serve          # the page on http://127.0.0.1:4180
 ```
 
-`registry.json` and `data/` are gitignored. Both paths can be moved with `HSCLUBS_REGISTRY` and
-`HSCLUBS_STORE`.
+`registry.json` and `data/` are gitignored. Everything is configurable by environment variable:
+`HSCLUBS_REGISTRY`, `HSCLUBS_STORE`, `HSCLUBS_POLL_INTERVAL_MS`, `HSCLUBS_PORT`, `HSCLUBS_HOST`,
+`HSCLUBS_PAGE_TITLE`. The server binds to localhost unless told otherwise: this is a private page
+on a personal machine, and answering the whole network is not something to turn on by accident.
 
 What a poll does: fetch that school's `/api/summary` with the stored `ETag`, and record the
 result. An unchanged school answers `304` and nothing is rewritten. A school that is down keeps
 its last good summary and gains a `lastError`, so the page can show a stale card with a reason
 instead of an empty one.
+
+The page is rendered from the store on each request -- no build step, no output file to keep in
+sync, and never staler than what the poller wrote. Everything on it came from someone else's
+server, so everything on it is escaped.
+
+Typical operation is two processes: `npm run watch` and `npm run serve`.
 
 ```bash
 npm test        # unit tests, plus a real captured response from a running school site
@@ -63,7 +75,7 @@ npm run typecheck
 
 | Path | Purpose |
 | --- | --- |
-| `src/` | The poller: registry, bounded fetch, store. |
+| `src/` | The poller (registry, bounded fetch, store, schedule) and the page (render, serve). |
 | `docs/` | The contract, the registry format, and the operating runbook. |
 | `registry.example.json` | The shape of the school list. The real one is not in git. |
 

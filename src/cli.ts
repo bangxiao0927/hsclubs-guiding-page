@@ -1,37 +1,62 @@
-import { loadRegistry, pollableSchools } from './registry.js'
+import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
+import { pollAllSchools } from './pollAll.js'
 import { pollSchool } from './pollSchool.js'
+import { renderPage } from './renderPage.js'
+import { runOnInterval } from './schedule.js'
+import { createPageServer } from './serve.js'
 import { SchoolStore } from './store.js'
 
 /**
- * Phase 1 (docs/ROADMAP.md): read one school.
+ * The operator's entry point (docs/ROADMAP.md).
  *
- *   npm run poll -- <slug>
+ *   npm run poll -- <slug>   one school, once
+ *   npm run poll:all         every listed, verified school, once
+ *   npm run watch            every school, now and then on an interval
+ *   npm run serve            the page, rendered from the store on each request
  *
  * Registry path from HSCLUBS_REGISTRY (default ./registry.json), store path from HSCLUBS_STORE
  * (default ./data/schools.json). Both are gitignored: the registry carries tokens, the store
  * carries other people's data.
  */
-const main = async (): Promise<number> => {
-  const slug = process.argv[2]
-  if (!slug) {
-    console.error('Usage: npm run poll -- <slug>')
-    return 2
+const registryPath = () => process.env['HSCLUBS_REGISTRY'] ?? 'registry.json'
+const storePath = () => process.env['HSCLUBS_STORE'] ?? 'data/schools.json'
+
+/**
+ * A misread number here reaches other people's servers: `HSCLUBS_POLL_INTERVAL_MS=1h` is NaN,
+ * which setTimeout treats as 1ms, and the watcher would hammer every school in the registry
+ * because of one typo. Anything that is not a positive finite number falls back, loudly.
+ */
+const positiveNumber = (name: string, fallback: number): number => {
+  const raw = process.env[name]
+  if (raw === undefined || raw.trim() === '') return fallback
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) {
+    console.error(`${name}=${raw} is not a positive number; using ${fallback}`)
+    return fallback
   }
+  return value
+}
 
-  const registryPath = process.env['HSCLUBS_REGISTRY'] ?? 'registry.json'
-  const storePath = process.env['HSCLUBS_STORE'] ?? 'data/schools.json'
+/** Default hourly: this reads a directory that changes weekly. */
+const intervalMs = () => positiveNumber('HSCLUBS_POLL_INTERVAL_MS', 60 * 60 * 1000)
+const pageTitle = () => process.env['HSCLUBS_PAGE_TITLE'] ?? 'HS Clubs'
+const pagePort = () => positiveNumber('HSCLUBS_PORT', 4180)
+const pageHost = () => process.env['HSCLUBS_HOST'] ?? '127.0.0.1'
 
-  const registry = await loadRegistry(registryPath)
+const loadPollable = async (): Promise<SchoolEntry[]> => pollableSchools(await loadRegistry(registryPath()))
+
+const pollOne = async (slug: string): Promise<number> => {
+  const registry = await loadRegistry(registryPath())
   const entry = pollableSchools(registry).find((school) => school.slug === slug)
   if (!entry) {
     const known = registry.map((school) => school.slug).join(', ') || '(none)'
     console.error(
-      `No verified, listed school with slug "${slug}" in ${registryPath}. Known slugs: ${known}`,
+      `No verified, listed school with slug "${slug}" in ${registryPath()}. Known slugs: ${known}`,
     )
     return 1
   }
 
-  const store = await SchoolStore.open(storePath)
+  const store = await SchoolStore.open(storePath())
   const { outcome, record } = await pollSchool(entry, store.get(slug))
   await store.put(record)
 
@@ -49,6 +74,119 @@ const main = async (): Promise<number> => {
       // A school being down is not this program failing; the exit code says "nothing new was
       // stored", and the reason is on the record for the page to explain.
       return 1
+  }
+}
+
+const runOnePass = async (): Promise<number> => {
+  const entries = await loadPollable()
+  if (entries.length === 0) {
+    console.error(`No verified, listed schools in ${registryPath()}`)
+    return 1
+  }
+
+  const store = await SchoolStore.open(storePath())
+  const report = await pollAllSchools(entries, store, {
+    onSchool: ({ slug, outcome, error }) =>
+      console.log(`${slug}: ${outcome}${error ? ` -- ${error}` : ''}`),
+  })
+
+  console.log(
+    `pass done: ${report.updated} updated, ${report.unchanged} unchanged, ${report.failed} failed`,
+  )
+  // Zero even when some schools failed: the pass itself worked, and each school's own state says
+  // what happened. Anything else would make a single flaky school look like a broken job.
+  return 0
+}
+
+const watch = async (): Promise<number> => {
+  const controller = new AbortController()
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.on(signal, () => {
+      console.log(`\n${signal} received, stopping after the current pass`)
+      controller.abort()
+    })
+  }
+
+  const interval = intervalMs()
+  console.log(`watching ${registryPath()}, polling every ${Math.round(interval / 1000)}s`)
+
+  await runOnInterval(
+    async () => {
+      // Re-read the registry every pass, so adding or unlisting a school does not need a
+      // restart -- the operator edits a file, and the next pass respects it.
+      const entries = await loadPollable()
+      const store = await SchoolStore.open(storePath())
+      const report = await pollAllSchools(entries, store)
+      console.log(
+        `${report.startedAt}: ${report.updated} updated, ${report.unchanged} unchanged, ${report.failed} failed`,
+      )
+    },
+    {
+      intervalMs: interval,
+      signal: controller.signal,
+      onError: (error) =>
+        console.error(`pass failed: ${error instanceof Error ? error.message : String(error)}`),
+    },
+  )
+  return 0
+}
+
+const serve = async (): Promise<number> => {
+  // Rendered per request from the store, so the page is never staler than what the poller has
+  // written and there is no output file to keep in sync.
+  const server = createPageServer({
+    port: pagePort(),
+    host: pageHost(),
+    render: async () => renderPage((await SchoolStore.open(storePath())).all(), { title: pageTitle() }),
+  })
+
+  const listening = await new Promise<string | null>((resolve) => {
+    // Without an error listener Node rethrows this as an uncaught exception with a stack trace,
+    // and the likeliest cause is the most ordinary one: the operator already has a copy running.
+    server.once('error', (error: NodeJS.ErrnoException) =>
+      resolve(
+        error.code === 'EADDRINUSE'
+          ? `${pageHost()}:${pagePort()} is already in use -- is another copy already serving?`
+          : `Could not listen on ${pageHost()}:${pagePort()}: ${error.message}`,
+      ),
+    )
+    server.once('listening', () => {
+      console.log(`serving http://${pageHost()}:${pagePort()} from ${storePath()}`)
+      resolve(null)
+    })
+  })
+  if (listening) {
+    console.error(listening)
+    return 1
+  }
+
+  await new Promise<void>((resolve) => {
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+      process.on(signal, () => {
+        console.log(`\n${signal} received, closing`)
+        server.close(() => resolve())
+      })
+    }
+  })
+  return 0
+}
+
+const main = async (): Promise<number> => {
+  const command = process.argv[2]
+  switch (command) {
+    case 'all':
+      return runOnePass()
+    case 'watch':
+      return watch()
+    case 'serve':
+      return serve()
+    case undefined:
+      console.error(
+        'Usage: npm run poll -- <slug> | npm run poll:all | npm run watch | npm run serve',
+      )
+      return 2
+    default:
+      return pollOne(command)
   }
 }
 
