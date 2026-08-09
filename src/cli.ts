@@ -1,7 +1,9 @@
 import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
 import { pollAllSchools } from './pollAll.js'
 import { pollSchool } from './pollSchool.js'
+import { renderPage } from './renderPage.js'
 import { runOnInterval } from './schedule.js'
+import { createPageServer } from './serve.js'
 import { SchoolStore } from './store.js'
 
 /**
@@ -10,6 +12,7 @@ import { SchoolStore } from './store.js'
  *   npm run poll -- <slug>   one school, once
  *   npm run poll:all         every listed, verified school, once
  *   npm run watch            every school, now and then on an interval
+ *   npm run serve            the page, rendered from the store on each request
  *
  * Registry path from HSCLUBS_REGISTRY (default ./registry.json), store path from HSCLUBS_STORE
  * (default ./data/schools.json). Both are gitignored: the registry carries tokens, the store
@@ -20,6 +23,9 @@ const storePath = () => process.env['HSCLUBS_STORE'] ?? 'data/schools.json'
 
 /** Default hourly: this reads a directory that changes weekly. */
 const intervalMs = () => Number(process.env['HSCLUBS_POLL_INTERVAL_MS'] ?? 60 * 60 * 1000)
+const pageTitle = () => process.env['HSCLUBS_PAGE_TITLE'] ?? 'HS Clubs'
+const pagePort = () => Number(process.env['HSCLUBS_PORT'] ?? 4180)
+const pageHost = () => process.env['HSCLUBS_HOST'] ?? '127.0.0.1'
 
 const loadPollable = async (): Promise<SchoolEntry[]> => pollableSchools(await loadRegistry(registryPath()))
 
@@ -109,6 +115,33 @@ const watch = async (): Promise<number> => {
   return 0
 }
 
+const serve = async (): Promise<number> => {
+  // Rendered per request from the store, so the page is never staler than what the poller has
+  // written and there is no output file to keep in sync.
+  const server = createPageServer({
+    port: pagePort(),
+    host: pageHost(),
+    render: async () => renderPage((await SchoolStore.open(storePath())).all(), { title: pageTitle() }),
+  })
+
+  await new Promise<void>((resolve) => {
+    server.once('listening', () => {
+      console.log(`serving http://${pageHost()}:${pagePort()} from ${storePath()}`)
+      resolve()
+    })
+  })
+
+  await new Promise<void>((resolve) => {
+    for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+      process.on(signal, () => {
+        console.log(`\n${signal} received, closing`)
+        server.close(() => resolve())
+      })
+    }
+  })
+  return 0
+}
+
 const main = async (): Promise<number> => {
   const command = process.argv[2]
   switch (command) {
@@ -116,8 +149,12 @@ const main = async (): Promise<number> => {
       return runOnePass()
     case 'watch':
       return watch()
+    case 'serve':
+      return serve()
     case undefined:
-      console.error('Usage: npm run poll -- <slug> | npm run poll:all | npm run watch')
+      console.error(
+        'Usage: npm run poll -- <slug> | npm run poll:all | npm run watch | npm run serve',
+      )
       return 2
     default:
       return pollOne(command)
