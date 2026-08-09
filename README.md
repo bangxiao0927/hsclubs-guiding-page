@@ -35,13 +35,35 @@ Consequences worth knowing before writing any code here:
 
 ## Status
 
-Scaffolding. The contract, the registry format and the verification rules are settled; no
-application code has been written yet. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Phase 1 of [`docs/ROADMAP.md`](docs/ROADMAP.md): it can read one school. The next phases are the
+scheduler and the page itself.
+
+## Running it
+
+```bash
+npm install
+cp registry.example.json registry.json   # then edit: real URL, token, state
+npm run poll -- mvhs
+```
+
+`registry.json` and `data/` are gitignored. Both paths can be moved with `HSCLUBS_REGISTRY` and
+`HSCLUBS_STORE`.
+
+What a poll does: fetch that school's `/api/summary` with the stored `ETag`, and record the
+result. An unchanged school answers `304` and nothing is rewritten. A school that is down keeps
+its last good summary and gains a `lastError`, so the page can show a stale card with a reason
+instead of an empty one.
+
+```bash
+npm test        # unit tests, plus a real captured response from a running school site
+npm run typecheck
+```
 
 ## Repository layout (planned)
 
 | Path | Purpose |
 | --- | --- |
+| `src/` | The poller: registry, bounded fetch, store. |
 | `docs/` | The contract, the registry format, and the operating runbook. |
 | `registry.example.json` | The shape of the school list. The real one is not in git. |
 
