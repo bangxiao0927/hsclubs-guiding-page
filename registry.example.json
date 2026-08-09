@@ -1,0 +1,19 @@
+{
+  "_comment": [
+    "Shape of the school registry. Copy this next to the running job and edit it there.",
+    "The operated file carries verification tokens and real URLs, so it is not tracked in git;",
+    "see docs/REGISTRY.md."
+  ],
+  "schools": [
+    {
+      "slug": "mvhs",
+      "summaryUrl": "https://mvhs.example.org/api/summary",
+      "verification": {
+        "token": "replace-with-a-one-time-token",
+        "verifiedAt": null,
+        "state": "pending"
+      },
+      "listed": true
+    }
+  ]
+}

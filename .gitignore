@@ -1,0 +1,26 @@
+# The operated registry: verification tokens and the real school URLs. Only the example is
+# tracked -- see docs/REGISTRY.md.
+registry.json
+registry.local.json
+
+# Anything pulled from a school site, and anything the job writes while running.
+/data/
+*.log
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Build output (whatever the stack turns out to be)
+node_modules/
+dist/
+build/
+target/
