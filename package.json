@@ -1,0 +1,22 @@
+{
+  "name": "hsclubs-guiding-page",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reads each school site's public summary and shows them on one page.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "poll": "tsx src/cli.ts",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
