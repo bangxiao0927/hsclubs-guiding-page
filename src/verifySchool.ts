@@ -1,5 +1,6 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 
+import { discardResponse, readBoundedText } from './boundedResponse.js'
 import { fetchSummary, SummaryFetchError, type FetchOptions } from './fetchSummary.js'
 import type { SchoolEntry } from './registry.js'
 import { SummaryFormatError } from './summary.js'
@@ -31,39 +32,6 @@ export const issueVerificationToken = (): string => randomBytes(32).toString('ba
 export const challengeUrlFor = (summaryUrl: string): URL => {
   const summary = new URL(summaryUrl)
   return new URL(CHALLENGE_PATH, summary.origin)
-}
-
-const discard = async (response: Response): Promise<void> => {
-  await response.body?.cancel().catch(() => undefined)
-}
-
-const readBoundedText = async (response: Response, maxBytes: number): Promise<string> => {
-  const declared = Number(response.headers.get('content-length'))
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    await discard(response)
-    throw new DefinitiveVerificationError(
-      `challenge declares ${declared} bytes, over the ${maxBytes} cap`,
-    )
-  }
-  if (!response.body) return ''
-  const reader = response.body.getReader()
-  const chunks: Uint8Array[] = []
-  let total = 0
-  try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      if (!value) continue
-      total += value.byteLength
-      if (total > maxBytes) {
-        throw new DefinitiveVerificationError(`challenge exceeded the ${maxBytes} byte cap`)
-      }
-      chunks.push(value)
-    }
-  } finally {
-    await reader.cancel().catch(() => undefined)
-  }
-  return Buffer.concat(chunks).toString('utf8')
 }
 
 /**
@@ -142,13 +110,13 @@ export const verifySchool = async (
     })
 
     if (response.status >= 300 && response.status < 400) {
-      await discard(response)
+      await discardResponse(response)
       throw new DefinitiveVerificationError(
         `Challenge redirected (status ${response.status}); redirects are not trusted`,
       )
     }
     if (!response.ok) {
-      await discard(response)
+      await discardResponse(response)
       if (response.status >= 500 || response.status === 408 || response.status === 429) {
         throw new Error(`Challenge answered ${response.status}`)
       }
@@ -157,7 +125,10 @@ export const verifySchool = async (
 
     // A trailing newline is what a text file normally has; no other normalization, because a
     // token embedded in a page or surrounded by other text is not the challenge file requested.
-    const actual = (await readBoundedText(response, options.maxBytes ?? DEFAULT_MAX_BYTES))
+    const actual = (await readBoundedText(response, options.maxBytes ?? DEFAULT_MAX_BYTES, {
+      label: 'challenge',
+      error: (message) => new DefinitiveVerificationError(message),
+    }))
       .replace(/\r?\n$/, '')
     if (!tokensMatch(token, actual)) {
       throw new DefinitiveVerificationError('Challenge token did not match')
