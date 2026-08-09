@@ -2,8 +2,11 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2023"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    // nodenext, not bundler: this runs directly under Node as ESM, where a relative import must
+    // carry its .js extension. Bundler resolution accepts an extensionless one, so it would
+    // typecheck and pass CI and then fail only when the CLI is actually run.
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "types": ["node"],
     "strict": true,
     "noUncheckedIndexedAccess": true,

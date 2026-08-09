@@ -28,6 +28,7 @@ const DEFAULT_MAX_BYTES = 256 * 1024
 const readBounded = async (response: Response, maxBytes: number): Promise<string> => {
   const declared = Number(response.headers.get('content-length'))
   if (Number.isFinite(declared) && declared > maxBytes) {
+    await discard(response)
     throw new SummaryFetchError(`Response declares ${declared} bytes, over the ${maxBytes} cap`)
   }
   if (!response.body) return ''
@@ -53,6 +54,17 @@ const readBounded = async (response: Response, maxBytes: number): Promise<string
     await reader.cancel().catch(() => undefined)
   }
   return Buffer.concat(chunks).toString('utf8')
+}
+
+/**
+ * Releases a body this function is not going to read.
+ *
+ * An abandoned body keeps its connection out of the pool until it is garbage collected, so a
+ * school that answers 503 (or an oversized body) on every poll would leak sockets in the
+ * long-running poller Phase 2 turns this into.
+ */
+const discard = async (response: Response): Promise<void> => {
+  await response.body?.cancel().catch(() => undefined)
 }
 
 export const fetchSummary = async (
@@ -82,11 +94,13 @@ export const fetchSummary = async (
   if (response.status === 304) return { outcome: 'not-modified' }
 
   if (response.status >= 300 && response.status < 400) {
+    await discard(response)
     throw new SummaryFetchError(
       `Refusing to follow a redirect from ${url.host} (status ${response.status})`,
     )
   }
   if (!response.ok) {
+    await discard(response)
     throw new SummaryFetchError(`${url.host} answered ${response.status}`)
   }
 

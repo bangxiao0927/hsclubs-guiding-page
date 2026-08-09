@@ -57,14 +57,40 @@ describe('fetchSummary', () => {
   // not choose. A redirect would let a registered site point it anywhere, including inside this
   // machine's own network.
   it('refuses to follow a redirect', async () => {
-    const fetchImpl = respond('', {
-      status: 302,
-      headers: { location: 'http://169.254.169.254/latest/meta-data/' },
-    })
+    // Asserting on the option, not only on the status: a mock answers 302 whatever the caller
+    // asked for, so without this the test would still pass with `redirect: 'manual'` deleted --
+    // while the real behaviour became "follow it and read whatever is there".
+    const fetchImpl = (async (_url: URL, init: RequestInit) => {
+      expect(init.redirect).toBe('manual')
+      return new Response('', {
+        status: 302,
+        headers: { location: 'http://169.254.169.254/latest/meta-data/' },
+      })
+    }) as unknown as typeof fetch
 
     await expect(
       fetchSummary('https://mvhs.example.org/api/summary', 'mvhs', { fetchImpl }),
     ).rejects.toBeInstanceOf(SummaryFetchError)
+  })
+
+  // An abandoned body holds its connection open until garbage collection, which a long-running
+  // poller would feel as a socket leak against a school that always errors.
+  it('releases the body of a response it refuses to read', async () => {
+    let cancelled = false
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(8))
+      },
+      cancel() {
+        cancelled = true
+      },
+    })
+    const fetchImpl = (async () => new Response(stream, { status: 503 })) as unknown as typeof fetch
+
+    await expect(
+      fetchSummary('https://mvhs.example.org/api/summary', 'mvhs', { fetchImpl }),
+    ).rejects.toThrow(/503/)
+    expect(cancelled).toBe(true)
   })
 
   it('refuses a non-https url before making any request', async () => {
