@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 
 /**
  * The school list, as described in docs/REGISTRY.md.
@@ -15,6 +16,8 @@ export interface SchoolEntry {
   verification: {
     token: string | null
     verifiedAt: string | null
+    lastCheckedAt: string | null
+    lastError: string | null
     state: VerificationState
   }
   listed: boolean
@@ -62,6 +65,8 @@ const parseEntry = (raw: unknown, index: number): SchoolEntry => {
 
   const token = verification['token']
   const verifiedAt = verification['verifiedAt']
+  const lastCheckedAt = verification['lastCheckedAt']
+  const lastError = verification['lastError']
   const listed = raw['listed']
 
   return {
@@ -70,6 +75,8 @@ const parseEntry = (raw: unknown, index: number): SchoolEntry => {
     verification: {
       token: typeof token === 'string' ? token : null,
       verifiedAt: typeof verifiedAt === 'string' ? verifiedAt : null,
+      lastCheckedAt: typeof lastCheckedAt === 'string' ? lastCheckedAt : null,
+      lastError: typeof lastError === 'string' ? lastError : null,
       state: state as VerificationState,
     },
     // Absent means listed: a school is added to be shown, and forgetting the flag should not
@@ -117,6 +124,21 @@ export const loadRegistry = async (path: string): Promise<SchoolEntry[]> => {
     if (error instanceof RegistryError) throw error
     throw new RegistryError(`The registry at ${path} is not valid JSON: ${String(error)}`)
   }
+}
+
+/**
+ * Atomically writes the operated registry after a verification state change.
+ *
+ * Verification is operational state, not a cache: losing a verifiedAt or a newly-issued token
+ * means an operator has to repeat the ceremony, so unlike SchoolStore an unreadable registry is
+ * never discarded or rebuilt. Writes go beside the target and rename over it, preserving the
+ * previous complete file across a crash mid-write.
+ */
+export const saveRegistry = async (path: string, entries: SchoolEntry[]): Promise<void> => {
+  await mkdir(dirname(path), { recursive: true })
+  const temporary = join(dirname(path), `.${Date.now()}-${process.pid}.registry.tmp`)
+  await writeFile(temporary, `${JSON.stringify({ schools: entries }, null, 2)}\n`, 'utf8')
+  await rename(temporary, path)
 }
 
 /** Schools this page may poll and show: verified, and not switched off by the operator. */

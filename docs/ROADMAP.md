@@ -29,7 +29,7 @@ which one is stale.
 
 Exit check: a visitor can tell which schools exist, how big each is, and where to go next.
 
-## Phase 4 - Verification tooling
+## Phase 4 - Verification tooling (done)
 
 - Issue a token, check a challenge file, flip a school to `verified`.
 - Re-verify on a schedule and mark `failing`.

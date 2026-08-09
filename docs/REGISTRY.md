@@ -22,6 +22,8 @@ configuration) and back it up like any other operational data.
       "verification": {
         "token": "issued-once-by-the-operator",
         "verifiedAt": "2026-08-08T12:00:00Z",
+        "lastCheckedAt": "2026-08-08T12:00:00Z",
+        "lastError": null,
         "state": "verified"
       },
       "listed": true
@@ -32,6 +34,9 @@ configuration) and back it up like any other operational data.
 
 - `summaryUrl` is the only address this repo ever fetches for that school.
 - `state` is `pending`, `verified`, or `failing`. Only `verified` schools are shown.
+- `verifiedAt` is the last successful proof; `lastCheckedAt` says when the latest attempt ran,
+  and `lastError` says why that attempt failed. A failure keeps the old successful timestamp for
+  history but changes `state` immediately, so the school stops being polled and listed.
 - `listed` is the operator's own switch: set it false to stop guiding a school without deleting
   its history.
 
@@ -46,6 +51,18 @@ configuration) and back it up like any other operational data.
    means the operator of that origin is the one who was given the token.
 4. The `slug` in that origin's `/api/summary` must equal the `slug` in the registry entry. This
    stops a verified school from claiming a different school's identity.
+
+The tooling performs that sequence:
+
+```bash
+npm run verify:issue -- mvhs  # writes a new token into registry.json and prints what to publish
+npm run verify -- mvhs        # checks the challenge and the summary slug; writes the new state
+npm run verify:all            # one pass over every listed school
+npm run verify:watch          # one pass now, then every 30 days by default
+```
+
+`HSCLUBS_VERIFY_INTERVAL_MS` changes the interval. A bad numeric value falls back loudly rather
+than becoming a hot loop against school servers.
 
 Both checks re-run on a schedule (monthly is plenty). A school that stops answering, or whose
 challenge file disappears, moves to `failing` and drops off the page -- it is not deleted, so an

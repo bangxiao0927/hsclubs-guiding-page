@@ -4,7 +4,13 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
-import { loadRegistry, parseRegistry, pollableSchools, RegistryError } from './registry.js'
+import {
+  loadRegistry,
+  parseRegistry,
+  pollableSchools,
+  RegistryError,
+  saveRegistry,
+} from './registry.js'
 
 const entry = (overrides: Record<string, unknown> = {}) => ({
   slug: 'mvhs',
@@ -96,5 +102,24 @@ describe('loadRegistry', () => {
 
   it('says which file it could not read', async () => {
     await expect(loadRegistry('does-not-exist.json')).rejects.toThrow(/does-not-exist\.json/)
+  })
+
+  it('round-trips verification state through an atomic save', async () => {
+    const path = await write(JSON.stringify({ schools: [entry()] }))
+    const entries = await loadRegistry(path)
+    entries[0]!.verification = {
+      ...entries[0]!.verification,
+      state: 'failing',
+      lastCheckedAt: '2026-08-09T12:00:00Z',
+      lastError: 'Challenge answered 404',
+    }
+
+    await saveRegistry(path, entries)
+
+    expect((await loadRegistry(path))[0]?.verification).toMatchObject({
+      state: 'failing',
+      lastCheckedAt: '2026-08-09T12:00:00Z',
+      lastError: 'Challenge answered 404',
+    })
   })
 })
