@@ -90,6 +90,17 @@ rather than changing `HSCLUBS_HOST`:
 ssh -N -L 4180:127.0.0.1:4180 you@that-machine   # then open http://127.0.0.1:4180
 ```
 
+To put it on a hostname instead, keep `HSCLUBS_HOST` at localhost and let a reverse proxy be the
+only thing that reaches it. On this machine that is Caddy (`C:\ProgramData\Caddy\Caddyfile`,
+started at boot by the `Caddy (HSclubs guiding page)` task): it terminates TLS with a certificate
+it obtains itself, requires basic auth, and proxies to `127.0.0.1:4180`. Only 80 and 443 are open
+in the firewall; 4180 stays unreachable from outside, so there is no second door that skips the
+password. The site block is commented out until an A record exists -- a hostname Caddy cannot
+validate is a certificate it will retry forever.
+
+The credential is not in this repository. Rotate it with
+`caddy hash-password --plaintext <new>` and replace the hash in the Caddyfile.
+
 ```bash
 npm test        # unit tests, plus a real captured response from a running school site
 npm run typecheck
