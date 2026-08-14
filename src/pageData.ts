@@ -1,6 +1,13 @@
 import { pollableSchools, type SchoolEntry } from './registry.js'
 import type { SchoolStore, SchoolRecord } from './store.js'
 
+/** A record plus where a visitor should be sent: this page's whole point is the hand-off. */
+export interface PageSchool {
+  record: SchoolRecord
+  /** Origin of the school's own site, derived from its verified summary URL. */
+  siteUrl: string
+}
+
 /**
  * The records the page is allowed to render, in registry order.
  *
@@ -10,5 +17,10 @@ import type { SchoolStore, SchoolRecord } from './store.js'
  * The registry is the authority for visibility; `store.get` also supplies an empty record for a
  * newly verified school, so the page says "No data yet" rather than omitting it silently.
  */
-export const pageRecords = (entries: SchoolEntry[], store: SchoolStore): SchoolRecord[] =>
-  pollableSchools(entries).map((entry) => store.get(entry.slug))
+export const pageSchools = (entries: SchoolEntry[], store: SchoolStore): PageSchool[] =>
+  pollableSchools(entries).map((entry) => ({
+    record: store.get(entry.slug),
+    // The origin only, never the registry's full summary path: a visitor is being sent to the
+    // school's front page, and that origin is the one verification proved control of.
+    siteUrl: new URL(entry.summaryUrl).origin,
+  }))
