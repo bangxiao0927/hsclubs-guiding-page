@@ -79,6 +79,17 @@ verification proved control of.
 
 Typical operation is two processes: `npm run watch` and `npm run serve`.
 
+On the Windows machine this is operated from, both run as at-logon scheduled tasks
+(`HSclubs guiding page - serve` / `- watch`) pointing at small launcher scripts outside the
+repository, so a reboot brings the page back without anyone logging in and typing. The server
+still binds to localhost only: this machine has a public address, and a page with no TLS and no
+login has no business answering it. To read it from somewhere else, forward the port over SSH
+rather than changing `HSCLUBS_HOST`:
+
+```bash
+ssh -N -L 4180:127.0.0.1:4180 you@that-machine   # then open http://127.0.0.1:4180
+```
+
 ```bash
 npm test        # unit tests, plus a real captured response from a running school site
 npm run typecheck
