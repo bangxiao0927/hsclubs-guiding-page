@@ -1,6 +1,6 @@
 import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
 import { saveRegistry, withRegistryLock } from './registry.js'
-import { pageRecords } from './pageData.js'
+import { pageSchools } from './pageData.js'
 import { pollAllSchools } from './pollAll.js'
 import { pollSchool } from './pollSchool.js'
 import { renderPage } from './renderPage.js'
@@ -152,7 +152,7 @@ const serve = async (): Promise<number> => {
         loadRegistry(registryPath()),
         SchoolStore.open(storePath()),
       ])
-      return renderPage(pageRecords(entries, store), { title: pageTitle() })
+      return renderPage(pageSchools(entries, store), { title: pageTitle() })
     },
   })
 

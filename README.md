@@ -70,6 +70,13 @@ The page is rendered from the store on each request -- no build step, no output 
 sync, and never staler than what the poller wrote. Everything on it came from someone else's
 server, so everything on it is escaped.
 
+It looks like a school site on purpose: the same colour tokens, radii and card shadows as the 1st
+repo's frontend, light and dark, so clicking a card through to a school does not feel like leaving
+for a different product. Nothing is fetched to achieve that -- no web font, no stylesheet, no
+script from anywhere -- because the page has to render the same on a machine that is offline at
+the moment of the request. Each card links to the school's own origin, which is the origin
+verification proved control of.
+
 Typical operation is two processes: `npm run watch` and `npm run serve`.
 
 ```bash
