@@ -116,11 +116,14 @@ being pinned arbitrarily. Choosing a pin animates a spherical rotation and zoom;
 HTML above the SVG, so they stay legible and keyboard reachable. The basemap is a simplified land
 outline vendored into the bundle, which means no tile server ever learns who is reading this page.
 
-With two or more mapped schools, the globe is a live tour: it starts on the first real school and
-rotates to the next one every 5.2 seconds. The progress line shows when the camera will move;
-touching a pin or moving keyboard focus into the map pauses it, and **Resume tour** makes the
-motion explicit again. Demo coordinates may be illustrative, but real-school coordinates are
-confirmed against the school's known address before they enter the operated registry.
+The globe is draggable: grab it and it rotates under the pointer, a flick keeps a little momentum
+and decays, and arrow keys rotate it for anyone not using a pointer. `touch-action: none` means a
+phone spins the earth instead of scrolling the page. With two or more mapped schools it also runs
+a tour, starting on the first real school and rotating to the next every 5.2 seconds, with a
+progress line showing when the camera will move next. Any drag, tap or keypress takes control
+immediately -- a tween must never fight a finger -- and **Resume tour** hands it back. Demo
+coordinates are illustrative; real-school coordinates are confirmed against the school's known
+address before they enter the operated registry.
 
 An entry with `"demo": true` is rendered with a **Demonstration** badge and an explanation in
 its drawer. This matters because origin verification proves control of a host; it does not turn

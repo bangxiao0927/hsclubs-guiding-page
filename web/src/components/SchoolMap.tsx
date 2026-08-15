@@ -1,6 +1,6 @@
 import { geoDistance, geoGraticule10, geoOrthographic, geoPath } from 'd3-geo'
 import type { Feature, MultiPolygon } from 'geojson'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 
 import land from '../data/land.json'
 import { displayName } from '../filters'
@@ -35,17 +35,34 @@ const meanCamera = (schools: School[]): Camera => {
   }
 }
 
-const useCamera = (target: Camera): Camera => {
+const clampLat = (lat: number) => Math.max(-85, Math.min(85, lat))
+const wrapLon = (lon: number) => ((((lon + 180) % 360) + 360) % 360) - 180
+
+/**
+ * The camera the globe is drawn from.
+ *
+ * It has two owners and the human is the senior one: an animated fly-to when a school is chosen,
+ * and direct control while a pointer or key is driving it. `hold` exists so a drag is not fighting
+ * a tween for the same value -- an animation that keeps re-centring under someone's finger feels
+ * broken, however smooth it is.
+ */
+const useCamera = (target: Camera, hold: boolean) => {
   const [camera, setCamera] = useState(target)
   const current = useRef(target)
   const frame = useRef(0)
 
+  const set = (next: Camera) => {
+    const safe = { ...next, lat: clampLat(next.lat), lon: wrapLon(next.lon) }
+    current.current = safe
+    setCamera(safe)
+  }
+
   useEffect(() => {
+    if (hold) return
     const reduced =
       typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
     if (reduced) {
-      current.current = target
-      setCamera(target)
+      set(target)
       return
     }
 
@@ -55,20 +72,20 @@ const useCamera = (target: Camera): Camera => {
       if (!started) started = time
       const progress = Math.min(1, (time - started) / 900)
       const eased = 1 - Math.pow(1 - progress, 3)
-      const next = {
-        lon: from.lon + (target.lon - from.lon) * eased,
+      // Rotate the short way round, so a fly-to never spins the long way across the Pacific.
+      const delta = wrapLon(target.lon - from.lon)
+      set({
+        lon: from.lon + delta * eased,
         lat: from.lat + (target.lat - from.lat) * eased,
         zoom: from.zoom + (target.zoom - from.zoom) * eased,
-      }
-      current.current = next
-      setCamera(next)
+      })
       if (progress < 1) frame.current = requestAnimationFrame(step)
     }
     frame.current = requestAnimationFrame(step)
     return () => cancelAnimationFrame(frame.current)
-  }, [target.lat, target.lon, target.zoom])
+  }, [hold, target.lat, target.lon, target.zoom])
 
-  return camera
+  return { camera, current, set }
 }
 
 /**
@@ -87,6 +104,10 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
   const [focus, setFocus] = useState<string | null>(first?.slug ?? null)
   const [paused, setPaused] = useState(false)
   const [cycle, setCycle] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const drag = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null)
+  const spin = useRef<{ lon: number; lat: number }>({ lon: 0, lat: 0 })
+  const inertia = useRef(0)
   const active = located.find((school) => school.slug === focus) ?? null
 
   useEffect(() => {
@@ -110,7 +131,77 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
   const target: Camera = active?.location
     ? { lon: active.location.lon, lat: active.location.lat, zoom: 1.55 }
     : overview
-  const camera = useCamera(target)
+  const { camera, current, set } = useCamera(target, dragging)
+
+  /**
+   * Dragging rotates the sphere directly.
+   *
+   * Degrees per pixel is divided by zoom so a zoomed-in globe does not fly out from under the
+   * pointer, and Pointer Events cover mouse, touch and pen with one path -- a separate touch
+   * implementation is how one of the two silently rots.
+   */
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 && event.pointerType === 'mouse') return
+    cancelAnimationFrame(inertia.current)
+    drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false }
+    spin.current = { lon: 0, lat: 0 }
+    setPaused(true)
+    setDragging(true)
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = drag.current
+    if (!state || state.id !== event.pointerId) return
+    const perPixel = 0.32 / camera.zoom
+    const dx = (event.clientX - state.x) * perPixel
+    const dy = (event.clientY - state.y) * perPixel
+    if (Math.abs(event.clientX - state.x) + Math.abs(event.clientY - state.y) > 3) state.moved = true
+    state.x = event.clientX
+    state.y = event.clientY
+    spin.current = { lon: dx, lat: -dy }
+    set({ ...current.current, lon: current.current.lon + dx, lat: current.current.lat - dy })
+  }
+
+  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = drag.current
+    if (!state || state.id !== event.pointerId) return
+    drag.current = null
+    setDragging(false)
+    // Releasing mid-flick keeps a little momentum, then stops. Without decay the globe either
+    // stops dead or never stops, and both read as a bug.
+    if (state.moved) {
+      setFocus(null)
+      let velocity = spin.current
+      const glide = () => {
+        velocity = { lon: velocity.lon * 0.94, lat: velocity.lat * 0.94 }
+        if (Math.abs(velocity.lon) + Math.abs(velocity.lat) < 0.02) return
+        set({
+          ...current.current,
+          lon: current.current.lon + velocity.lon,
+          lat: current.current.lat + velocity.lat,
+        })
+        inertia.current = requestAnimationFrame(glide)
+      }
+      inertia.current = requestAnimationFrame(glide)
+    }
+  }
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = 6 / camera.zoom
+    const moves: Record<string, [number, number]> = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, step],
+      ArrowDown: [0, -step],
+    }
+    const move = moves[event.key]
+    if (!move) return
+    event.preventDefault()
+    setPaused(true)
+    setFocus(null)
+    set({ ...current.current, lon: current.current.lon + move[0], lat: current.current.lat + move[1] })
+  }
 
   const projection = useMemo(
     () =>
@@ -167,12 +258,27 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
         </div>
       </div>
 
+      {/* The drag surface owns the sphere. It is a real focusable control with arrow keys, so
+          rotation is not mouse-only, and touch-action:none stops a phone scrolling the page
+          while someone is spinning the earth. */}
+      <div
+        role="application"
+        tabIndex={0}
+        aria-label={`Rotatable globe showing ${located.length} school locations. Use the arrow keys to rotate.`}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onKeyDown={onKeyDown}
+        className={`absolute inset-0 touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] ${
+          dragging ? 'cursor-grabbing' : 'cursor-grab'
+        }`}
+      >
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         preserveAspectRatio="xMidYMid meet"
-        className="absolute inset-0 h-full w-full"
-        role="img"
-        aria-label={`3D globe showing ${located.length} school locations`}
+        className="pointer-events-none absolute inset-0 h-full w-full"
+        aria-hidden
       >
         <defs>
           <radialGradient id="ocean" cx="38%" cy="28%" r="75%">
@@ -243,6 +349,7 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
           )
         })}
       </svg>
+      </div>
 
       <div className="pointer-events-none absolute inset-0">
         {located.map((school) => {
@@ -287,7 +394,7 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
           </div>
         ) : (
           <p className="m-0 rounded-full border border-[var(--line)] bg-[var(--header-bg)] px-3 py-1.5 text-xs text-[var(--text-muted)] backdrop-blur-xl">
-            Select a school to rotate and focus the globe
+            Drag the globe to explore &middot; select a school to fly there
           </p>
         )}
         <div className="flex items-center gap-2">

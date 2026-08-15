@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -68,6 +68,41 @@ describe('SchoolMap', () => {
     await user.click(screen.getByRole('button', { name: 'Resume tour' }))
     expect(screen.getByRole('heading', { name: 'Alpha High' })).toBeInTheDocument()
     await waitFor(() => expect(landPath()).toBe(world))
+  })
+
+  it('rotates when dragged and hands control back to the person dragging', async () => {
+    render(
+      <SchoolMap
+        schools={[
+          school('a', 'Alpha High', { lat: 37.4, lon: -122.1 }),
+          school('b', 'Beta High', { lat: 35.7, lon: 139.7 }),
+        ]}
+      />,
+    )
+    const globe = screen.getByRole('application')
+    globe.setPointerCapture = () => {}
+    const before = landPath()
+
+    fireEvent.pointerDown(globe, { pointerId: 1, clientX: 400, clientY: 300, button: 0 })
+    fireEvent.pointerMove(globe, { pointerId: 1, clientX: 520, clientY: 330 })
+
+    // The drag itself moves the camera; it does not wait for a tween to catch up.
+    expect(landPath()).not.toBe(before)
+
+    // Taking hold of the globe also takes over from the tour, so the camera cannot be yanked
+    // away mid-gesture. (Release behaviour -- inertia and clearing the focus -- needs full
+    // Pointer Event semantics and is covered against a real browser instead of jsdom.)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Resume tour' })).toBeInTheDocument())
+  })
+
+  it('rotates with the arrow keys for anyone not using a pointer', () => {
+    render(<SchoolMap schools={[school('a', 'Alpha High', { lat: 37.4, lon: -122.1 })]} />)
+    const globe = screen.getByRole('application')
+    const before = landPath()
+
+    fireEvent.keyDown(globe, { key: 'ArrowRight' })
+
+    expect(landPath()).not.toBe(before)
   })
 
   it('moves focus between schools as a tour until someone interacts', async () => {
