@@ -28,7 +28,7 @@ const payload: PagePayload = {
       publishedAt: null,
       lastUpdatedAt: '2026-08-14T23:00:00.000Z',
       lastPolledAt: '2026-08-15T00:00:00.000Z',
-      lastError: null,
+      lastError: null,      history: [],      trend: null,
     },
     {
       slug: 'demo-high',
@@ -45,7 +45,7 @@ const payload: PagePayload = {
       publishedAt: null,
       lastUpdatedAt: '2026-08-12T00:00:00.000Z',
       lastPolledAt: '2026-08-12T00:00:00.000Z',
-      lastError: 'demo.example.org answered 503',
+      lastError: 'demo.example.org answered 503',      history: [],      trend: null,
     },
   ],
 }

@@ -2,6 +2,7 @@ import type { PointerEvent } from 'react'
 
 import { displayName } from '../filters'
 import type { School } from '../types'
+import { Sparkline } from './Sparkline'
 import { StatusBadge } from './StatusBadge'
 
 const MAX_CATEGORIES = 6
@@ -47,12 +48,21 @@ export const SchoolCard = ({ school, onOpen }: { school: School; onOpen: (school
         </p>
       ) : (
         <>
-          <p className="m-0 mt-1 flex items-baseline gap-2 text-[0.9rem] text-[var(--text-faint)]">
-            <b className="font-display gradient-text text-[2.7rem] font-extrabold leading-none tracking-[-0.045em] tabular-nums">
-              {school.clubCount}
-            </b>
-            clubs
-          </p>
+          <span className="mt-1 flex items-end justify-between gap-3">
+            <span className="flex items-baseline gap-2 text-[0.9rem] text-[var(--text-faint)]">
+              <b className="font-display gradient-text text-[2.7rem] font-extrabold leading-none tracking-[-0.045em] tabular-nums">
+                {school.clubCount}
+              </b>
+              clubs
+              {school.trend !== null && school.trend !== 0 && (
+                <span className={school.trend > 0 ? 'text-[var(--ok)]' : 'text-[var(--warn)]'}>
+                  {school.trend > 0 ? '+' : ''}
+                  {school.trend}
+                </span>
+              )}
+            </span>
+            <Sparkline points={school.history} className="mb-1 shrink-0 opacity-80" />
+          </span>
           <ul className="m-0 mt-1 flex list-none flex-wrap gap-1.5 p-0">
             {shown.map((category) => (
               <li

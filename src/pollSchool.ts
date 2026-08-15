@@ -1,6 +1,6 @@
 import { fetchSummary, type FetchOptions } from './fetchSummary.js'
 import type { SchoolEntry } from './registry.js'
-import type { SchoolRecord } from './store.js'
+import type { HistoryPoint, SchoolRecord } from './store.js'
 
 export type PollOutcome = 'updated' | 'not-modified' | 'failed'
 
@@ -16,6 +16,24 @@ export interface PollResult {
  * A failure never discards the last good summary: a school that is down should show as stale
  * with a reason, not vanish from the page.
  */
+/** Kept for a month, and only when the number moved: an unchanged school answers 304 nearly
+ *  every hour, and a point per poll would be 700 identical entries a month per school. */
+const HISTORY_DAYS = 30
+
+const appendHistory = (
+  previous: HistoryPoint[],
+  at: string,
+  clubCount: number,
+): HistoryPoint[] => {
+  const last = previous[previous.length - 1]
+  const points = last?.clubCount === clubCount ? previous : [...previous, { at, clubCount }]
+  const cutoff = Date.parse(at) - HISTORY_DAYS * 24 * 60 * 60 * 1000
+  // Always keep the last point before the window, or a school that has not changed in a month
+  // would have no line to draw at all.
+  const firstInside = points.findIndex((point) => Date.parse(point.at) >= cutoff)
+  return firstInside <= 0 ? points : points.slice(firstInside - 1)
+}
+
 export const pollSchool = async (
   entry: SchoolEntry,
   previous: SchoolRecord,
@@ -32,7 +50,13 @@ export const pollSchool = async (
     if (result.outcome === 'not-modified') {
       return {
         outcome: 'not-modified',
-        record: { ...previous, slug: entry.slug, lastPolledAt: now, lastError: null },
+        record: {
+          ...previous,
+          slug: entry.slug,
+          lastPolledAt: now,
+          lastError: null,
+          failureStreak: 0,
+        },
       }
     }
 
@@ -45,6 +69,8 @@ export const pollSchool = async (
         lastPolledAt: now,
         lastUpdatedAt: now,
         lastError: null,
+        failureStreak: 0,
+        history: appendHistory(previous.history, now, result.summary.clubCount),
       },
     }
   } catch (error) {
@@ -55,6 +81,9 @@ export const pollSchool = async (
         slug: entry.slug,
         lastPolledAt: now,
         lastError: describe(error),
+        // Counted, not flagged: one failed poll is a school restarting. What to do about a run
+        // of them is a decision for the alerting, not for this function.
+        failureStreak: previous.failureStreak + 1,
       },
     }
   }

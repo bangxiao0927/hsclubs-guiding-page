@@ -69,6 +69,14 @@ npm run web:test   # the app's own tests
 localhost unless told otherwise: this is a private page on a personal machine, and answering the
 whole network is not something to turn on by accident.
 
+A school that stops answering is reported once, not hourly. After `HSCLUBS_ALERT_AFTER` failed
+polls in a row (3 by default) the pass prints `ALERT: ...` and, if `HSCLUBS_ALERT_WEBHOOK` is
+set, posts one JSON body there; recovery is reported the same way. Alerts fire on transitions
+only -- an operator who gets an hourly reminder of a problem they already know about learns to
+filter the channel, which is how the alert that mattered gets missed. A webhook that is
+unreachable is logged and dropped: losing a notification is a smaller failure than losing the
+poller.
+
 What a poll does: fetch that school's `/api/summary` with the stored `ETag`, and record the
 result. An unchanged school answers `304` and nothing is rewritten. A school that is down keeps
 its last good summary and gains a `lastError`, so the page can show a stale card with a reason

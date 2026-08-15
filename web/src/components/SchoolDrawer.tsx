@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 
 import { displayName } from '../filters'
 import type { School } from '../types'
+import { Sparkline } from './Sparkline'
 import { StatusBadge } from './StatusBadge'
 
 const Row = ({ label, value }: { label: string; value: string }) => (
@@ -103,6 +104,20 @@ export const SchoolDrawer = ({ school, onClose }: { school: School | null; onClo
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {school.history.length >= 2 && (
+          <div>
+            <h3 className="font-display m-0 mb-1 text-[0.95rem] font-bold">
+              Clubs over the last month
+            </h3>
+            <div className="flex items-center gap-3">
+              <Sparkline points={school.history} className="h-10 w-full" />
+              <span className="shrink-0 text-[0.85rem] text-[var(--text-faint)]">
+                {school.history[0]?.clubCount} &rarr; {school.history[school.history.length - 1]?.clubCount}
+              </span>
+            </div>
           </div>
         )}
 

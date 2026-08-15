@@ -67,6 +67,8 @@ describe('pollSchool', () => {
       lastPolledAt: '2026-08-08T00:00:00.000Z',
       lastUpdatedAt: '2026-08-08T00:00:00.000Z',
       lastError: null,
+      failureStreak: 0,
+      history: [],
     }
 
     const { outcome, record } = await pollSchool(school, previous, {
@@ -92,6 +94,8 @@ describe('pollSchool', () => {
       lastPolledAt: '2026-08-08T00:00:00.000Z',
       lastUpdatedAt: '2026-08-08T00:00:00.000Z',
       lastError: null,
+      failureStreak: 0,
+      history: [],
     }
 
     const { outcome, record } = await pollSchool(school, previous, {

@@ -10,6 +10,12 @@ import { parseSummary, type SchoolSummary } from './summary.js'
  * the last good summary, the ETag to poll with, and the last error -- so a stale card on the
  * page can always be explained rather than just being old.
  */
+/** One observation of a school's club count, kept so the page can show a trend. */
+export interface HistoryPoint {
+  at: string
+  clubCount: number
+}
+
 export interface SchoolRecord {
   slug: string
   summary: SchoolSummary | null
@@ -17,6 +23,21 @@ export interface SchoolRecord {
   lastPolledAt: string | null
   lastUpdatedAt: string | null
   lastError: string | null
+  /**
+   * Consecutive failed polls, reset by any success.
+   *
+   * A count rather than a boolean: one failed poll is a school restarting, and alerting on it
+   * would train an operator to ignore the alert. The threshold lives with the alerting, not
+   * here.
+   */
+  failureStreak: number
+  /**
+   * Club counts over time, appended only when the number actually changes.
+   *
+   * A directory that changes weekly polled hourly would otherwise write 168 identical points a
+   * week, and the store is a JSON file read whole on every request.
+   */
+  history: HistoryPoint[]
 }
 
 export type StoreContents = Record<string, SchoolRecord>
@@ -28,12 +49,29 @@ export const emptyRecord = (slug: string): SchoolRecord => ({
   lastPolledAt: null,
   lastUpdatedAt: null,
   lastError: null,
+  failureStreak: 0,
+  history: [],
 })
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
 const optionalString = (value: unknown): string | null => (typeof value === 'string' ? value : null)
+
+/** A malformed point is dropped rather than failing the record: history is the least important
+ *  thing on the card, and losing a chart must never lose a school. */
+const parseHistory = (value: unknown): HistoryPoint[] => {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((point) => {
+    if (!isRecord(point)) return []
+    const at = point['at']
+    const clubCount = point['clubCount']
+    if (typeof at !== 'string' || typeof clubCount !== 'number' || !Number.isFinite(clubCount)) {
+      return []
+    }
+    return [{ at, clubCount }]
+  })
+}
 
 /**
  * Strips a UTF-8 byte order mark, as the registry loader does.
@@ -57,6 +95,7 @@ const withoutByteOrderMark = (contents: string): string =>
 const parseRecord = (slug: string, raw: unknown): SchoolRecord => {
   if (!isRecord(raw)) return emptyRecord(slug)
 
+  const streak = raw['failureStreak']
   const base: SchoolRecord = {
     slug,
     summary: null,
@@ -64,6 +103,8 @@ const parseRecord = (slug: string, raw: unknown): SchoolRecord => {
     lastPolledAt: optionalString(raw['lastPolledAt']),
     lastUpdatedAt: optionalString(raw['lastUpdatedAt']),
     lastError: optionalString(raw['lastError']),
+    failureStreak: typeof streak === 'number' && Number.isInteger(streak) && streak >= 0 ? streak : 0,
+    history: parseHistory(raw['history']),
   }
   if (raw['summary'] === undefined || raw['summary'] === null) return base
 
