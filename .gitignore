@@ -29,3 +29,5 @@ node_modules/
 dist/
 build/
 target/
+# tsc -b writes this next to the tsconfig it built.
+*.tsbuildinfo
