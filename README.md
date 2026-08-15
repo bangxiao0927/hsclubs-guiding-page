@@ -111,6 +111,13 @@ into the choice. Mobile adds the same switcher to a thumb-reachable bottom dock 
 and Browse. Category facets become one horizontally scrolling, snap-aligned rail on a narrow
 screen rather than fourteen chips pushing the actual schools several screens down.
 
+Under the hero is a half-height map of the network. Coordinates come only from `location` in the
+registry -- confirmed by the operator, never geocoded from an address -- so a school without one
+is counted as awaiting a location instead of being pinned to a guess. Choosing a pin animates a
+pan and zoom to that school; the labels are HTML above the SVG, so they stay legible at every
+zoom and are reachable by keyboard. The basemap is a simplified land outline vendored into the
+bundle, which means no tile server ever learns who is reading this page.
+
 An entry with `"demo": true` is rendered with a **Demonstration** badge and an explanation in
 its drawer. This matters because origin verification proves control of a host; it does not turn
 fixture data into a real participating school. Demo entries exercise multi-school search,

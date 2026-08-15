@@ -47,6 +47,11 @@ configuration) and back it up like any other operational data.
   exercise the multi-school UI but does not represent an approved participating school. The
   page labels it **Demonstration**. Origin verification proves control of a host, not the
   institutional identity behind a made-up school name.
+- `location` is an optional `{ "lat": number, "lon": number }` the operator confirms out of
+  band. It is never derived: `/api/summary` publishes no coordinates, `address` is frequently
+  null, and geocoding free text would drop a guessed pin on a real institution. A malformed or
+  out-of-range pair is a hard registry error, while an absent one is normal -- the map plots the
+  schools it knows and reports the rest as awaiting a confirmed location.
 
 ## Verifying a school
 

@@ -10,6 +10,7 @@ const school = (slug: string, name: string, clubs: number, demo = false): School
   siteUrl: `https://${slug}.example.org`,
   host: `${slug}.example.org`,
   demo,
+  location: null,
   status: 'live',
   schoolName: name,
   address: null,

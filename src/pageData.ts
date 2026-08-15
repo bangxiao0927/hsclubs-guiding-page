@@ -8,6 +8,8 @@ export interface PageSchool {
   siteUrl: string
   /** A fixture for exercising the UI, not a participating school. */
   demo?: boolean
+  /** Operator-confirmed coordinates, when there are any. */
+  location?: { lat: number; lon: number }
 }
 
 /**
@@ -26,4 +28,5 @@ export const pageSchools = (entries: SchoolEntry[], store: SchoolStore): PageSch
     // school's front page, and that origin is the one verification proved control of.
     siteUrl: new URL(entry.summaryUrl).origin,
     demo: entry.demo === true,
+    ...(entry.location ? { location: entry.location } : {}),
   }))

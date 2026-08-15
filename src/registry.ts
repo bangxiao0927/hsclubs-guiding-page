@@ -29,6 +29,14 @@ export interface SchoolEntry {
    * fixture from being presented as institutionally approved.
    */
   demo?: boolean
+  /**
+   * Where the school is, when the operator has confirmed it.
+   *
+   * Not derived from the summary: `/api/summary` carries no coordinates, `address` is often
+   * null, and geocoding free text would put a guessed pin on a real institution. Absent is a
+   * supported state; the map says so rather than inventing a location.
+   */
+  location?: { lat: number; lon: number }
 }
 
 export class RegistryError extends Error {}
@@ -77,6 +85,7 @@ const parseEntry = (raw: unknown, index: number): SchoolEntry => {
   const lastError = verification['lastError']
   const listed = raw['listed']
   const demo = raw['demo']
+  const location = parseLocation(raw['location'], where)
 
   return {
     slug,
@@ -92,7 +101,26 @@ const parseEntry = (raw: unknown, index: number): SchoolEntry => {
     // silently hide it.
     listed: listed === undefined ? true : listed === true,
     demo: demo === true,
+    ...(location ? { location } : {}),
   }
+}
+
+/** @throws RegistryError for a malformed pair; a wrong pin is worse than no pin. */
+const parseLocation = (
+  raw: unknown,
+  where: string,
+): { lat: number; lon: number } | null => {
+  if (raw === undefined || raw === null) return null
+  if (!isRecord(raw)) throw new RegistryError(`${where}.location must be an object`)
+  const lat = raw['lat']
+  const lon = raw['lon']
+  if (typeof lat !== 'number' || !Number.isFinite(lat) || lat < -90 || lat > 90) {
+    throw new RegistryError(`${where}.location.lat must be a number between -90 and 90`)
+  }
+  if (typeof lon !== 'number' || !Number.isFinite(lon) || lon < -180 || lon > 180) {
+    throw new RegistryError(`${where}.location.lon must be a number between -180 and 180`)
+  }
+  return { lat, lon }
 }
 
 export const parseRegistry = (raw: unknown): SchoolEntry[] => {
