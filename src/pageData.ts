@@ -6,6 +6,8 @@ export interface PageSchool {
   record: SchoolRecord
   /** Origin of the school's own site, derived from its verified summary URL. */
   siteUrl: string
+  /** A fixture for exercising the UI, not a participating school. */
+  demo?: boolean
 }
 
 /**
@@ -23,4 +25,5 @@ export const pageSchools = (entries: SchoolEntry[], store: SchoolStore): PageSch
     // The origin only, never the registry's full summary path: a visitor is being sent to the
     // school's front page, and that origin is the one verification proved control of.
     siteUrl: new URL(entry.summaryUrl).origin,
+    demo: entry.demo === true,
   }))

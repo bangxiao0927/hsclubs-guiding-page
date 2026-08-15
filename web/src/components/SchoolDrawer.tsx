@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react'
 import { displayName } from '../filters'
 import type { School } from '../types'
 import { Sparkline } from './Sparkline'
-import { StatusBadge } from './StatusBadge'
+import { DemoBadge, StatusBadge } from './StatusBadge'
 
 const Row = ({ label, value }: { label: string; value: string }) => (
   <div className="flex items-baseline justify-between gap-4 border-b border-[var(--line)] py-2 last:border-0">
@@ -74,6 +74,7 @@ export const SchoolDrawer = ({ school, onClose }: { school: School | null; onClo
         </div>
 
         <div className="flex items-center gap-3">
+          {school.demo && <DemoBadge />}
           <StatusBadge status={school.status} />
           {school.clubCount !== null && (
             <span className="text-[0.9rem] text-[var(--text-muted)]">
@@ -85,6 +86,13 @@ export const SchoolDrawer = ({ school, onClose }: { school: School | null; onClo
         {school.lastError && (
           <p className="m-0 rounded-xl border border-dashed border-[var(--line-strong)] bg-[var(--surface)] p-3 text-[0.88rem] text-[var(--warn)]">
             Last poll failed: {school.lastError}
+          </p>
+        )}
+
+        {school.demo && (
+          <p className="m-0 rounded-xl border border-dashed border-[var(--warn)]/60 bg-[var(--surface)] p-3 text-[0.88rem] text-[var(--text-muted)]">
+            This directory contains fixture data used to exercise search, filters, trends and
+            alerts. It is not a participating school.
           </p>
         )}
 

@@ -43,6 +43,10 @@ configuration) and back it up like any other operational data.
   blip must not hide every school for the default 30-day interval.
 - `listed` is the operator's own switch: set it false to stop guiding a school without deleting
   its history.
+- `demo` is an optional boolean for fixture data. Set it to true when an origin exists to
+  exercise the multi-school UI but does not represent an approved participating school. The
+  page labels it **Demonstration**. Origin verification proves control of a host, not the
+  institutional identity behind a made-up school name.
 
 ## Verifying a school
 

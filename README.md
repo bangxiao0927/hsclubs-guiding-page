@@ -95,6 +95,11 @@ whether it is alive -- with the directories one scroll below, searchable by scho
 sortable, filterable by category, and with a detail drawer for what a card has no room for. The
 one link that leaves goes to the school's own origin: the origin verification proved control of.
 
+An entry with `"demo": true` is rendered with a **Demonstration** badge and an explanation in
+its drawer. This matters because origin verification proves control of a host; it does not turn
+fixture data into a real participating school. Demo entries exercise multi-school search,
+filters, trends and alerting without pretending to be approved institutions.
+
 Everything on the page came from someone else's server. React escapes what it renders, the
 server-rendered fallback escapes by hand, and neither ever executes anything a school supplied.
 
