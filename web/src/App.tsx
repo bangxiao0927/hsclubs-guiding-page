@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { Controls } from './components/Controls'
 import { Header } from './components/Header'
 import { Hero } from './components/Hero'
 import { SchoolCard } from './components/SchoolCard'
 import { SchoolDrawer } from './components/SchoolDrawer'
-import { allCategories, filterByCategories, searchSchools, sortSchools, type SortKey } from './filters'
+import { filterByCategories, searchSchools, sortSchools, type SortKey } from './filters'
 import type { PagePayload, School } from './types'
 import { useTheme } from './useTheme'
+import { readViewState, writeViewState } from './urlState'
 
 type State =
   | { status: 'loading' }
@@ -25,12 +26,20 @@ const Skeleton = () => (
   </div>
 )
 
+const Notice = ({ children, tone = 'muted' }: { children: React.ReactNode; tone?: 'muted' | 'warn' }) => (
+  <p
+    className={`mt-7 rounded-[20px] border border-dashed border-[var(--line-strong)] bg-[var(--surface)] p-6 ${
+      tone === 'warn' ? 'text-[var(--warn)]' : 'text-[var(--text-muted)]'
+    }`}
+  >
+    {children}
+  </p>
+)
+
 export const App = () => {
   const [state, setState] = useState<State>({ status: 'loading' })
   const [theme, toggleTheme] = useTheme()
-  const [query, setQuery] = useState('')
-  const [sort, setSort] = useState<SortKey>('name')
-  const [selected, setSelected] = useState<string[]>([])
+  const [view, setView] = useState(() => readViewState(location.search))
   const [open, setOpen] = useState<School | null>(null)
 
   useEffect(() => {
@@ -53,17 +62,57 @@ export const App = () => {
     }
   }, [])
 
+  // The view is part of the address, so a link someone sends carries what they were looking at.
+  // replaceState rather than pushState: typing a query is not five history entries.
+  useEffect(() => {
+    history.replaceState(null, '', `${location.pathname}${writeViewState(view)}`)
+  }, [view])
+
+  useEffect(() => {
+    const onPop = () => setView(readViewState(location.search))
+    addEventListener('popstate', onPop)
+    return () => removeEventListener('popstate', onPop)
+  }, [])
+
   const payload = state.status === 'ready' ? state.payload : null
-  const schools = payload?.schools ?? []
-  const categories = useMemo(() => allCategories(schools), [schools])
+  const schools = useMemo(() => payload?.schools ?? [], [payload])
+  const searched = useMemo(() => searchSchools(schools, view.query), [schools, view.query])
   const visible = useMemo(
-    () => sortSchools(filterByCategories(searchSchools(schools, query), selected), sort),
-    [schools, query, selected, sort],
+    () => sortSchools(filterByCategories(searched, view.categories), view.sort),
+    [searched, view.categories, view.sort],
   )
+  // Counted against the search, not the category filter, so the numbers do not collapse to the
+  // one facet already chosen.
+  const categories = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const school of schools) for (const category of school.categories) counts.set(category.name, 0)
+    for (const school of searched) {
+      for (const category of school.categories) {
+        counts.set(category.name, (counts.get(category.name) ?? 0) + 1)
+      }
+    }
+    return [...counts.entries()]
+      .map(([name, count]) => ({ name, schools: count }))
+      .sort((a, b) => b.schools - a.schools || a.name.localeCompare(b.name))
+  }, [schools, searched])
 
   useEffect(() => {
     if (payload) document.title = payload.title
   }, [payload])
+
+  const setQuery = useCallback((query: string) => setView((v) => ({ ...v, query })), [])
+  const setSort = useCallback((sort: SortKey) => setView((v) => ({ ...v, sort })), [])
+  const toggleCategory = useCallback(
+    (name: string) =>
+      setView((v) => ({
+        ...v,
+        categories: v.categories.includes(name)
+          ? v.categories.filter((value) => value !== name)
+          : [...v.categories, name],
+      })),
+    [],
+  )
+  const reset = useCallback(() => setView((v) => ({ ...v, query: '', categories: [] })), [])
 
   const totals = payload?.totals ?? { schools: 0, clubs: 0, checkedAge: 'never' }
 
@@ -86,42 +135,43 @@ export const App = () => {
           {state.status === 'loading' && <Skeleton />}
 
           {state.status === 'failed' && (
-            <p className="mt-7 rounded-[20px] border border-dashed border-[var(--line-strong)] bg-[var(--surface)] p-6 text-[var(--warn)]">
-              Could not load the directories: {state.message}. The poller writes this page&rsquo;s data
-              on a schedule; try again in a moment.
-            </p>
+            <Notice tone="warn">
+              Could not load the directories: {state.message}. The poller writes this page&rsquo;s
+              data on a schedule; try again in a moment.
+            </Notice>
           )}
 
           {state.status === 'ready' && schools.length === 0 && (
-            <p className="mt-7 rounded-[20px] border border-dashed border-[var(--line-strong)] bg-[var(--surface)] p-6 text-[var(--text-muted)]">
-              No schools yet. Verify a school and it appears here.
-            </p>
+            <Notice>No schools yet. Verify a school and it appears here.</Notice>
           )}
 
           {state.status === 'ready' && schools.length > 0 && (
             <>
               <Controls
-                query={query}
+                query={view.query}
                 onQuery={setQuery}
-                sort={sort}
+                sort={view.sort}
                 onSort={setSort}
                 categories={categories}
-                selected={selected}
-                onToggleCategory={(name) =>
-                  setSelected((current) =>
-                    current.includes(name)
-                      ? current.filter((value) => value !== name)
-                      : [...current, name],
-                  )
-                }
-                onClear={() => setSelected([])}
+                selected={view.categories}
+                onToggleCategory={toggleCategory}
+                onClear={reset}
+                showing={visible.length}
+                total={schools.length}
               />
 
               {visible.length === 0 ? (
-                <p className="mt-7 rounded-[20px] border border-dashed border-[var(--line-strong)] bg-[var(--surface)] p-6 text-[var(--text-muted)]">
-                  No school matches that. Clear the search or the filters to see all{' '}
-                  {schools.length}.
-                </p>
+                <Notice>
+                  No school matches that.{' '}
+                  <button
+                    type="button"
+                    onClick={reset}
+                    className="cursor-pointer text-[var(--accent)] underline-offset-2 hover:underline"
+                  >
+                    Reset the search and filters
+                  </button>{' '}
+                  to see all {schools.length}.
+                </Notice>
               ) : (
                 <div
                   className={`mt-7 grid gap-4 ${
