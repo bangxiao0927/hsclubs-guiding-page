@@ -39,7 +39,8 @@ describe('renderPage', () => {
     expect(html).toContain('3535 Truman Ave, Mountain View, CA 94040')
     expect(html).toContain('106')
     expect(html).toContain('Service &amp; Leadership')
-    expect(html).toContain('Updated 1 hour ago')
+    // The school's own "my clubs changed then", not "we noticed then".
+    expect(html).toContain('Clubs updated 1 hour ago')
   })
 
   // The page exists to hand a visitor over to the school that owns the data.
@@ -162,6 +163,7 @@ describe('renderPage', () => {
     const html = renderPage(
       [
         school({
+          summary: { ...record().summary!, lastUpdatedAt: '2026-08-01T12:00:00+00:00' },
           lastUpdatedAt: '2026-08-01T12:00:00Z',
           lastError: 'mvhs.example.org answered 503',
         }),
@@ -184,7 +186,13 @@ describe('renderPage', () => {
   // staleness by content age would brand every healthy school stale and make the signal useless.
   it('does not call a school stale just because its clubs have not changed', () => {
     const html = renderPage(
-      [school({ lastUpdatedAt: '2026-07-01T12:00:00Z', lastPolledAt: '2026-08-09T11:59:00Z' })],
+      [
+        school({
+          summary: { ...record().summary!, lastUpdatedAt: '2026-07-01T12:00:00+00:00' },
+          lastUpdatedAt: '2026-07-01T12:00:00Z',
+          lastPolledAt: '2026-08-09T11:59:00Z',
+        }),
+      ],
       { now: NOW },
     )
 

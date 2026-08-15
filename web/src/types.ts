@@ -15,8 +15,13 @@ export interface School {
   address: string | null
   clubCount: number | null
   categories: Category[]
-  updatedAge: string
+  /** When the school says its clubs last changed. */
+  publishedAge: string
+  /** When this page last saw that summary change. */
+  changedAge: string
+  /** When this page last asked. */
   checkedAge: string
+  publishedAt: string | null
   lastUpdatedAt: string | null
   lastPolledAt: string | null
   lastError: string | null

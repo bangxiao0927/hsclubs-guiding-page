@@ -136,7 +136,7 @@ const renderSchool = ({ record, siteUrl }: PageSchool, now: Date, staleAfterMs: 
       ${renderCategories(summary.categories)}
       ${note}
       <span class="school-foot">
-        <span class="freshness">Updated ${escapeHtml(describeAge(record.lastUpdatedAt, now))}${
+        <span class="freshness">Clubs updated ${escapeHtml(describeAge(summary.lastUpdatedAt, now))}${
           stale ? ' (stale)' : ''
         }</span>
         <span class="visit">Open site <span class="chev" aria-hidden="true">&rarr;</span></span>
