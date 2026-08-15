@@ -1,4 +1,4 @@
-import type { PointerEvent } from 'react'
+import { useEffect, useRef, useState, type PointerEvent } from 'react'
 
 import { displayName } from '../filters'
 import type { School } from '../types'
@@ -14,9 +14,40 @@ const MAX_CATEGORIES = 6
  * the drawer is where the "Open site" link lives -- one deliberate step to leave, instead of a
  * whole surface that leaves by accident.
  */
-export const SchoolCard = ({ school, onOpen }: { school: School; onOpen: (school: School) => void }) => {
+export const SchoolCard = ({
+  school,
+  onOpen,
+  index = 0,
+}: {
+  school: School
+  onOpen: (school: School) => void
+  index?: number
+}) => {
   const shown = school.categories.slice(0, MAX_CATEGORIES)
   const hidden = school.categories.length - shown.length
+  const card = useRef<HTMLButtonElement>(null)
+  const [revealed, setRevealed] = useState(
+    () => typeof IntersectionObserver === 'undefined',
+  )
+
+  useEffect(() => {
+    if (revealed || !card.current || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) return
+        setRevealed(true)
+        observer.disconnect()
+      },
+      { rootMargin: '0px 0px -8% 0px' },
+    )
+    observer.observe(card.current)
+    // An observer can be throttled in a background tab; that may cost the stagger, never content.
+    const fallback = window.setTimeout(() => setRevealed(true), 1200)
+    return () => {
+      observer.disconnect()
+      window.clearTimeout(fallback)
+    }
+  }, [revealed])
 
   const spotlight = (event: PointerEvent<HTMLButtonElement>) => {
     const box = event.currentTarget.getBoundingClientRect()
@@ -26,11 +57,17 @@ export const SchoolCard = ({ school, onOpen }: { school: School; onOpen: (school
 
   return (
     <button
+      ref={card}
       type="button"
       onClick={() => onOpen(school)}
       onPointerMove={spotlight}
       aria-label={`${displayName(school)} details`}
+      style={{ animationDelay: `${Math.min(index, 7) * 70}ms` }}
       className={`card-edge spotlight group relative isolate flex cursor-pointer flex-col gap-2.5 rounded-[20px] border bg-[var(--surface)] p-6 text-left shadow-[var(--shadow)] backdrop-blur-md transition duration-300 hover:-translate-y-1 hover:border-[var(--line-strong)] focus-visible:-translate-y-1 focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[var(--accent)] ${
+        revealed
+          ? 'animate-[card-in_600ms_cubic-bezier(.22,1,.36,1)_both]'
+          : 'translate-y-4 opacity-0'
+      } ${
         school.status === 'live' ? 'border-[var(--line)]' : 'border-dashed border-[var(--line)]'
       }`}
     >

@@ -68,8 +68,9 @@ describe('the directory page', () => {
     answerWith(payload)
     render(<App />)
 
-    expect(await screen.findByText('Mountain View High School')).toBeInTheDocument()
-    expect(screen.getByText('Demo High School')).toBeInTheDocument()
+    const directories = await screen.findByRole('region', { name: 'Directories' })
+    expect(within(directories).getByText('Mountain View High School')).toBeInTheDocument()
+    expect(within(directories).getByText('Demo High School')).toBeInTheDocument()
     expect(screen.getByText('Demonstration')).toBeInTheDocument()
     // The stale school says so, and says why.
     expect(screen.getByText(/answered 503/)).toBeInTheDocument()
@@ -81,12 +82,13 @@ describe('the directory page', () => {
     const user = userEvent.setup()
 
     await user.type(await screen.findByPlaceholderText(/search by school/i), 'demo')
-    expect(screen.queryByText('Mountain View High School')).not.toBeInTheDocument()
-    expect(screen.getByText('Demo High School')).toBeInTheDocument()
+    const directories = screen.getByRole('region', { name: 'Directories' })
+    expect(within(directories).queryByText('Mountain View High School')).not.toBeInTheDocument()
+    expect(within(directories).getByText('Demo High School')).toBeInTheDocument()
 
     await user.clear(screen.getByPlaceholderText(/search by school/i))
     await user.click(screen.getByRole('button', { name: /^STEM/ }))
-    expect(screen.queryByText('Demo High School')).not.toBeInTheDocument()
+    expect(within(directories).queryByText('Demo High School')).not.toBeInTheDocument()
 
     await user.type(screen.getByPlaceholderText(/search by school/i), 'demo')
     expect(screen.getByText(/no school matches that/i)).toBeInTheDocument()
