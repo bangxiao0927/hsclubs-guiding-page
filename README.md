@@ -66,8 +66,8 @@ npm run web:test   # the app's own tests
 `registry.json` and `data/` are gitignored. Everything is configurable by environment variable:
 `HSCLUBS_REGISTRY`, `HSCLUBS_STORE`, `HSCLUBS_POLL_INTERVAL_MS`, `HSCLUBS_PORT`, `HSCLUBS_HOST`,
 `HSCLUBS_PAGE_TITLE`, `HSCLUBS_VERIFY_INTERVAL_MS`, `HSCLUBS_WEB_DIR`. The server binds to
-localhost unless told otherwise: this is a private page on a personal machine, and answering the
-whole network is not something to turn on by accident.
+localhost unless told otherwise. Public access, when wanted, belongs in a TLS reverse proxy --
+not in a Node listener that also has access to the operated registry and store.
 
 A school that stops answering is reported once, not hourly. After `HSCLUBS_ALERT_AFTER` failed
 polls in a row (3 by default) the pass prints `ALERT: ...` and, if `HSCLUBS_ALERT_WEBHOOK` is
@@ -78,10 +78,12 @@ unreachable is logged and dropped: losing a notification is a smaller failure th
 poller.
 
 Every transition is also kept locally in `data/alerts.json`, whether or not a webhook is set,
-and exposed with current poll health at `/status`. Webhooks are delivery, not storage: a URL can
-be rotated or unavailable, while the status page still needs to explain what happened. It shows
-a school as degraded on its first failed poll even though notifications wait for the threshold --
-displaying the truth and waking an operator are different decisions.
+and exposed with current poll health at `/status`. On the operated public deployment that route
+and `/api/status` remain behind Basic Auth even though the directory and `/api/schools` are
+public: error details and alert history are operator data. Webhooks are delivery, not storage: a
+URL can be rotated or unavailable, while the status page still needs to explain what happened.
+It shows a school as degraded on its first failed poll even though notifications wait for the
+threshold -- displaying the truth and waking an operator are different decisions.
 
 What a poll does: fetch that school's `/api/summary` with the stored `ETag`, and record the
 result. An unchanged school answers `304` and nothing is rewritten. A school that is down keeps
@@ -111,27 +113,24 @@ server-rendered fallback escapes by hand, and neither ever executes anything a s
 
 Typical operation is two processes: `npm run watch` and `npm run serve`.
 
-On the Windows machine this is operated from, both run as at-logon scheduled tasks
+On the Windows machine this is operated from, both run as SYSTEM startup tasks
 (`HSclubs guiding page - serve` / `- watch`) pointing at small launcher scripts outside the
-repository, so a reboot brings the page back without anyone logging in and typing. The server
-still binds to localhost only: this machine has a public address, and a page with no TLS and no
-login has no business answering it. To read it from somewhere else, forward the port over SSH
-rather than changing `HSCLUBS_HOST`:
+repository, so a reboot brings the page back without anyone logging in. The server itself still
+binds to localhost; Caddy is the only process that answers the public network.
 
 ```bash
-ssh -N -L 4180:127.0.0.1:4180 you@that-machine   # then open http://127.0.0.1:4180
+https://clubs.bangxiao.net              # public directory
+ssh -N -L 4180:127.0.0.1:4180 you@that-machine   # direct operator tunnel, if needed
 ```
 
-To put it on a hostname instead, keep `HSCLUBS_HOST` at localhost and let a reverse proxy be the
-only thing that reaches it. On this machine that is Caddy (`C:\ProgramData\Caddy\Caddyfile`,
-started at boot by the `Caddy (HSclubs guiding page)` task): it terminates TLS with a certificate
-it obtains itself, requires basic auth, and proxies to `127.0.0.1:4180`. Only 80 and 443 are open
-in the firewall; 4180 stays unreachable from outside, so there is no second door that skips the
-password. The site block is commented out until an A record exists -- a hostname Caddy cannot
-validate is a certificate it will retry forever.
-
-The credential is not in this repository. Rotate it with
-`caddy hash-password --plaintext <new>` and replace the hash in the Caddyfile.
+Keep `HSCLUBS_HOST` at localhost and let the reverse proxy be the only thing that reaches it. On
+this machine that is Caddy (`C:\ProgramData\Caddy\Caddyfile`, started at boot by the
+`Caddy (HSclubs guiding page)` task): it terminates and renews TLS, rate-limits by source IP,
+serves the directory publicly, protects only `/status` and `/api/status` with Basic Auth, and
+proxies to `127.0.0.1:4180`. Only 80 and 443 are open in the firewall; 4180 stays unreachable
+from outside, so there is no second door around the proxy policy. The credential is not in this
+repository; rotate it with `caddy hash-password --plaintext <new>` and replace its hash in the
+Caddyfile.
 
 ```bash
 npm test        # unit tests, plus a real captured response from a running school site
