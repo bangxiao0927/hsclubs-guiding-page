@@ -38,3 +38,23 @@ export interface PagePayload {
   totals: { schools: number; clubs: number; checkedAge: string }
   schools: School[]
 }
+
+export interface StatusPayload {
+  generatedAt: string
+  state: 'healthy' | 'degraded' | 'waiting'
+  summary: string
+  schools: {
+    slug: string
+    state: 'healthy' | 'failing' | 'waiting'
+    checkedAge: string
+    failureStreak: number
+    error: string | null
+  }[]
+  alerts: {
+    slug: string
+    kind: 'failing' | 'recovered'
+    streak: number
+    error: string | null
+    at: string
+  }[]
+}

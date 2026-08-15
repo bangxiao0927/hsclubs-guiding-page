@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 
 import { alertsFor, describeAlert, sendAlerts } from './alerts.js'
+import { AlertLog } from './alertLog.js'
 import { staleBuildWarning } from './buildFreshness.js'
 import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
 import { saveRegistry, withRegistryLock } from './registry.js'
@@ -12,6 +13,7 @@ import { renderPage } from './renderPage.js'
 import { runOnInterval } from './schedule.js'
 import { createPageServer } from './serve.js'
 import { SchoolStore, type SchoolRecord } from './store.js'
+import { buildStatusPayload } from './statusPayload.js'
 import { verifyAllSchools } from './verifyAll.js'
 import { challengeUrlFor, issueVerificationToken, verifySchool } from './verifySchool.js'
 
@@ -33,6 +35,7 @@ import { challengeUrlFor, issueVerificationToken, verifySchool } from './verifyS
  */
 const registryPath = () => process.env['HSCLUBS_REGISTRY'] ?? 'registry.json'
 const storePath = () => process.env['HSCLUBS_STORE'] ?? 'data/schools.json'
+const alertPath = () => process.env['HSCLUBS_ALERT_STORE'] ?? 'data/alerts.json'
 
 /**
  * A misread number here reaches other people's servers: `HSCLUBS_POLL_INTERVAL_MS=1h` is NaN,
@@ -76,6 +79,15 @@ const reportAlerts = async (
   const events = alertsFor(previous, store.all(), alertAfter())
   if (events.length === 0) return
   for (const event of events) console.error(`ALERT: ${describeAlert(event)}`)
+
+  // Persistent local delivery is unconditional; a remote webhook is an optional second copy.
+  try {
+    const log = await AlertLog.open(alertPath())
+    await log.append(events)
+  } catch (error) {
+    // Alert storage is another delivery channel. Like a webhook, it must never end the watcher.
+    console.error(`Could not store alert(s): ${error instanceof Error ? error.message : String(error)}`)
+  }
 
   const webhook = alertWebhook()
   if (!webhook) return
@@ -195,6 +207,13 @@ const serve = async (): Promise<number> => {
     host: pageHost(),
     staticDir: webDir(),
     api: async () => buildPayload(await read(), { title: pageTitle() }),
+    statusApi: async () => {
+      const [store, alerts] = await Promise.all([
+        SchoolStore.open(storePath()),
+        AlertLog.open(alertPath()),
+      ])
+      return buildStatusPayload(store.all(), alerts.all())
+    },
     // Used when web/dist has not been built. Keeping it means a fresh checkout serves a working
     // page with `npm run serve` alone, with no build step on the machine that polls.
     render: async () => renderPage(await read(), { title: pageTitle() }),
