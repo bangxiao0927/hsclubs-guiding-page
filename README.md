@@ -105,6 +105,12 @@ below, reveal as they enter the viewport, and are searchable by school or host, 
 filterable by category, and backed by a detail drawer for what a card has no room for. The one
 link that leaves goes to the school's own origin: the origin verification proved control of.
 
+The nine-dot launcher in the header is an app switcher: it keeps the current Guide distinct from
+the independent school apps, names the host before a visitor leaves, and carries live/demo status
+into the choice. Mobile adds the same switcher to a thumb-reachable bottom dock alongside Guide
+and Browse. Category facets become one horizontally scrolling, snap-aligned rail on a narrow
+screen rather than fourteen chips pushing the actual schools several screens down.
+
 An entry with `"demo": true` is rendered with a **Demonstration** badge and an explanation in
 its drawer. This matters because origin verification proves control of a host; it does not turn
 fixture data into a real participating school. Demo entries exercise multi-school search,
