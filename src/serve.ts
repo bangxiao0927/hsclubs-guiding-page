@@ -22,6 +22,8 @@ export interface ServeOptions {
   render: () => Promise<string> | string
   /** The payload behind GET /api/schools. */
   api?: () => Promise<unknown> | unknown
+  /** Operational state and recent alert transitions behind GET /api/status. */
+  statusApi?: () => Promise<unknown> | unknown
   /** Directory of built assets, if one has been built. */
   staticDir?: string | null
 }
@@ -74,6 +76,7 @@ const sendFile = async (res: import('node:http').ServerResponse, file: string, h
 export const createPageServer = ({
   render,
   api,
+  statusApi,
   staticDir = null,
   host = '127.0.0.1',
   port = 4180,
@@ -93,13 +96,14 @@ export const createPageServer = ({
       )
     }
 
-    if (path === '/api/schools') {
-      if (!api) {
+    if (path === '/api/schools' || path === '/api/status') {
+      const build = path === '/api/status' ? statusApi : api
+      if (!build) {
         res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found\n')
         return
       }
       void Promise.resolve()
-        .then(api)
+        .then(build)
         .then((payload) => {
           const body = JSON.stringify(payload)
           res.writeHead(200, {
@@ -127,7 +131,9 @@ export const createPageServer = ({
         })
         .catch(fail)
 
-    const isDocument = path === '/' || path === '/index.html'
+    // Named app routes get the same document. Unknown paths remain 404 rather than a blanket
+    // SPA fallback that turns a misspelled asset into HTML and hides deployment mistakes.
+    const isDocument = path === '/' || path === '/index.html' || path === '/status'
     if (!staticDir) {
       if (!isDocument) {
         res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found\n')

@@ -97,6 +97,19 @@ describe('the page server', () => {
       expect(response.status).toBe(500)
       expect(await response.text()).toContain('registry unreadable')
     })
+
+    it('serves operational state separately from directory content', async () => {
+      const base = await start({
+        render: () => '<p>ok</p>',
+        api: () => ({ schools: [] }),
+        statusApi: () => ({ state: 'healthy', alerts: [] }),
+      })
+
+      expect(await (await fetch(`${base}/api/status`)).json()).toEqual({
+        state: 'healthy',
+        alerts: [],
+      })
+    })
   })
 
   describe('with a built app', () => {
@@ -106,6 +119,7 @@ describe('the page server', () => {
       const document = await fetch(base)
       expect(await document.text()).toContain('built')
       expect(document.headers.get('cache-control')).toBe('no-store')
+      expect(await (await fetch(`${base}/status`)).text()).toContain('built')
 
       const asset = await fetch(`${base}/assets/app-abc123.js`)
       expect(asset.status).toBe(200)

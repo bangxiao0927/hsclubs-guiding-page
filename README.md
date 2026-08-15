@@ -77,6 +77,12 @@ filter the channel, which is how the alert that mattered gets missed. A webhook 
 unreachable is logged and dropped: losing a notification is a smaller failure than losing the
 poller.
 
+Every transition is also kept locally in `data/alerts.json`, whether or not a webhook is set,
+and exposed with current poll health at `/status`. Webhooks are delivery, not storage: a URL can
+be rotated or unavailable, while the status page still needs to explain what happened. It shows
+a school as degraded on its first failed poll even though notifications wait for the threshold --
+displaying the truth and waking an operator are different decisions.
+
 What a poll does: fetch that school's `/api/summary` with the stored `ETag`, and record the
 result. An unchanged school answers `304` and nothing is rewritten. A school that is down keeps
 its last good summary and gains a `lastError`, so the page can show a stale card with a reason

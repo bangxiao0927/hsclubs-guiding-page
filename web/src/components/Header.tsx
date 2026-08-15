@@ -22,6 +22,12 @@ export const Header = ({
       </div>
       <div className="flex items-center gap-1">
         <a
+          href="/status"
+          className="hidden rounded-[9px] px-3 py-1.5 text-[0.9rem] font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)] sm:block"
+        >
+          Status
+        </a>
+        <a
           href="#directories"
           className="hidden rounded-[9px] px-3 py-1.5 text-[0.9rem] font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)] sm:block"
         >
