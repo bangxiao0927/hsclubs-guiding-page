@@ -129,12 +129,7 @@ export const App = () => {
         onOpenSwitcher={() => setSwitcher(true)}
       />
       <main id="top" className="pb-24 sm:pb-0">
-        <Hero totals={totals} schools={schools} />
-        {schools.length > 0 && (
-          <section className="mx-auto w-full max-w-[1200px] px-[clamp(1.15rem,4vw,3.5rem)] pb-[clamp(1.5rem,4vh,3rem)]">
-            <SchoolMap schools={schools} />
-          </section>
-        )}
+        {schools.length > 0 ? <SchoolMap schools={schools} /> : <Hero totals={totals} schools={schools} />}
         <section
           id="directories"
           aria-labelledby="directories-title"
