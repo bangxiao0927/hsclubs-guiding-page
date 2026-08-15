@@ -76,7 +76,7 @@ describe('renderPage', () => {
   // An observer that never fires -- a background tab, a throttling browser, a layout that
   // never intersects -- must cost the animation, not the content.
   it('shows revealed sections on a timer even if the observer never fires', () => {
-    expect(renderPage([school()], { now: NOW })).toContain("classList.add('in')})},1200)")
+    expect(renderPage([school()], { now: NOW })).toContain('setTimeout(function(){els.forEach(show)},1200)')
   })
 
   it('sums the directories it is showing', () => {
@@ -105,14 +105,18 @@ describe('renderPage', () => {
     ).toContain('class="schools"')
   })
 
-  // A page that fetches a font or a stylesheet stops rendering the moment this machine is
-  // offline -- which is exactly the situation the freshness line has to stay readable in.
-  it('depends on nothing it has to download', () => {
+  // Fonts and styling may come from the network; facts may not. Whatever fails to load, the
+  // numbers and the freshness line are already in the document.
+  it('keeps every fact in the HTML and downloads only decoration', () => {
     const html = renderPage([school()], { now: NOW })
 
-    expect(html).not.toMatch(/src="https?:\/\//)
-    expect(html).not.toMatch(/<link[^>]+href="(?!data:)/)
-    expect(html).not.toContain('@import')
+    // No executable code is fetched: the page's behaviour is all inline and reviewable here.
+    expect(html).not.toMatch(/<script[^>]+src=/)
+    // The only downloads are the font stylesheet and its preconnects.
+    const external = [...html.matchAll(/<link[^>]+href="(https?:[^"]+)"/g)].map((m) => m[1])
+    expect(external.every((url) => url?.startsWith('https://fonts.g'))).toBe(true)
+    // Counters animate towards a number the document already states.
+    expect(html).toContain('<b data-count="106">106</b>')
   })
 
   // A long tail of categories would push the freshness line off the card and leave every card
