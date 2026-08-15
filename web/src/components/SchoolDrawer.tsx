@@ -108,7 +108,8 @@ export const SchoolDrawer = ({ school, onClose }: { school: School | null; onClo
 
         <div className="mt-1">
           {school.address && <Row label="Address" value={school.address} />}
-          <Row label="Clubs updated" value={school.updatedAge} />
+          <Row label="Clubs updated" value={school.publishedAge} />
+          <Row label="Change seen here" value={school.changedAge} />
           <Row label="Last checked" value={school.checkedAge} />
           <Row label="Slug" value={school.slug} />
         </div>

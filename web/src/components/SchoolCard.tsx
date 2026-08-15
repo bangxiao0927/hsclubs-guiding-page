@@ -75,7 +75,7 @@ export const SchoolCard = ({ school, onOpen }: { school: School; onOpen: (school
         <p className="m-0 text-[0.85rem] text-[var(--warn)]">Last poll failed: {school.lastError}</p>
       )}
       <span className="mt-auto flex items-center justify-between gap-3 border-t border-[var(--line)] pt-3.5 text-[0.86rem]">
-        <span className="text-[var(--text-faint)]">Updated {school.updatedAge}</span>
+        <span className="text-[var(--text-faint)]">Clubs updated {school.publishedAge}</span>
         <span className="ml-auto inline-flex items-center gap-1.5 font-semibold text-[var(--accent)]">
           Details
           <span aria-hidden className="transition-transform duration-300 group-hover:translate-x-1">

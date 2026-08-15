@@ -20,9 +20,18 @@ export interface SchoolPayload {
   address: string | null
   clubCount: number | null
   categories: { name: string; count: number }[]
-  /** Human "3 hours ago", already resolved against the server's clock. */
-  updatedAge: string
+  /**
+   * Human "3 hours ago", already resolved against the server's clock.
+   *
+   * Three questions with three different owners, kept apart: `publishedAge` is when the school
+   * says its clubs last changed, `changedAge` is when this page last saw that summary change,
+   * and `checkedAge` is when it last asked. Collapsing them is how a page ends up claiming a
+   * directory changed when only the poller did.
+   */
+  publishedAge: string
+  changedAge: string
   checkedAge: string
+  publishedAt: string | null
   lastUpdatedAt: string | null
   lastPolledAt: string | null
   lastError: string | null
@@ -67,8 +76,10 @@ export const buildPayload = (
       categories: Object.entries(summary?.categories ?? {})
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count),
-      updatedAge: describeAge(record.lastUpdatedAt, now),
+      publishedAge: describeAge(summary?.lastUpdatedAt ?? null, now),
+      changedAge: describeAge(record.lastUpdatedAt, now),
       checkedAge: describeAge(record.lastPolledAt, now),
+      publishedAt: summary?.lastUpdatedAt ?? null,
       lastUpdatedAt: record.lastUpdatedAt,
       lastPolledAt: record.lastPolledAt,
       lastError: record.lastError,
