@@ -7,10 +7,10 @@ import type { SchoolRecord } from './store.js'
  * machine that is meant to be left alone.
  *
  * The visual language deliberately mirrors a school site (the 1st repo's frontend/src/assets):
- * same tokens, same radii, same card shadow, so arriving here and clicking through to a school
- * feels like one product rather than two. Nothing is imported to achieve that -- no web font, no
- * stylesheet, no script from anywhere -- because this page must render identically on a machine
- * with no outbound access at the moment of the request.
+ * same palette, same card shadow, same type scale, so arriving here and clicking through to a
+ * school feels like one product rather than two. Nothing is imported to achieve that -- no web
+ * font, no stylesheet, no script from anywhere -- because this page must render identically on
+ * a machine with no outbound access at the moment of the request.
  *
  * Everything rendered came from someone else's server, so everything rendered is escaped.
  */
@@ -93,25 +93,21 @@ const isStale = (record: SchoolRecord, now: Date, staleAfterMs: number): boolean
   return Number.isNaN(polled) || now.getTime() - polled > staleAfterMs
 }
 
-/**
- * The card itself is the link, so the whole target is clickable and one Tab stop long. That
- * makes this a label rather than a second link -- a link inside a link is not valid HTML and
- * lands a keyboard user on the same destination twice.
- */
-const visitLabel = (siteUrl: string): string =>
-  `<span class="visit">Open ${escapeHtml(hostOf(siteUrl))} <span aria-hidden="true">&rarr;</span></span>`
-
 const renderSchool = ({ record, siteUrl }: PageSchool, now: Date, staleAfterMs: number): string => {
   const href = escapeHtml(siteUrl)
+  const host = escapeHtml(hostOf(siteUrl))
   const summary = record.summary
+  // The card itself is the link, so the whole target is clickable and one Tab stop long. A
+  // second link inside it would not be valid HTML and would land a keyboard user on the same
+  // destination twice.
   if (!summary) {
     // Listed but never successfully read: say so rather than silently omitting the school, or
     // nobody will ever notice a school that has been broken since the day it was added.
-    return `<a class="school unavailable" href="${href}" rel="noopener noreferrer">
-      <p class="badge warn">No data</p>
-      <h2>${escapeHtml(record.slug)}</h2>
+    return `<a class="school unavailable" href="${href}" rel="noopener noreferrer" data-reveal>
+      <span class="school-top"><span class="host">${host}</span><span class="badge warn">No data</span></span>
+      <h3>${escapeHtml(record.slug)}</h3>
       <p class="note">No data yet. ${escapeHtml(record.lastError ?? 'Never polled.')}</p>
-      ${visitLabel(siteUrl)}
+      <span class="school-foot"><span class="visit">Open site <span aria-hidden="true">&rarr;</span></span></span>
     </a>`
   }
 
@@ -120,279 +116,391 @@ const renderSchool = ({ record, siteUrl }: PageSchool, now: Date, staleAfterMs: 
     ? `<p class="note">Last poll failed: ${escapeHtml(record.lastError)}</p>`
     : ''
 
-  return `<a class="school${stale ? ' stale' : ''}" href="${href}" rel="noopener noreferrer">
-      <p class="badge${stale ? ' warn' : ' ok'}">${stale ? 'Stale' : 'Live'}</p>
-      <h2>${escapeHtml(summary.schoolName)}</h2>
+  return `<a class="school${stale ? ' stale' : ''}" href="${href}" rel="noopener noreferrer" data-reveal>
+      <span class="school-top"><span class="host">${host}</span><span class="badge${
+        stale ? ' warn' : ' ok'
+      }">${stale ? 'Stale' : 'Live'}</span></span>
+      <h3>${escapeHtml(summary.schoolName)}</h3>
       ${summary.address ? `<p class="address">${escapeHtml(summary.address)}</p>` : ''}
       <p class="counts"><b>${escapeHtml(String(summary.clubCount))}</b> clubs</p>
       ${renderCategories(summary.categories)}
-      <p class="freshness">Updated ${escapeHtml(describeAge(record.lastUpdatedAt, now))}${
-        stale ? ' (stale)' : ''
-      }</p>
       ${note}
-      ${visitLabel(siteUrl)}
+      <span class="school-foot">
+        <span class="freshness">Updated ${escapeHtml(describeAge(record.lastUpdatedAt, now))}${
+          stale ? ' (stale)' : ''
+        }</span>
+        <span class="visit">Open site <span aria-hidden="true">&rarr;</span></span>
+      </span>
     </a>`
 }
 
-const statCard = (label: string, value: string): string =>
-  `<div class="stat"><p class="stat-label">${escapeHtml(
-    label,
-  )}</p><p class="stat-value">${escapeHtml(value)}</p></div>`
+/** `wide` is for a value that is a phrase rather than a number: "10 minutes ago" set at the
+ *  numeral size drags the row out of alignment and reads as the most important fact on it. */
+const statCard = (label: string, value: string, wide = false): string =>
+  `<div class="stat${wide ? ' wide' : ''}"><p class="stat-value">${escapeHtml(
+    value,
+  )}</p><p class="stat-label">${escapeHtml(label)}</p></div>`
 
 /**
- * Applied before the first paint, so a stored dark preference never flashes light. Mirrors the
- * school site's own bootstrap (localStorage key `theme`), which is what makes the two feel like
- * one product. It reads nothing a school site supplied, so no escaping question arises.
+ * Two jobs, both of which have to degrade to nothing: apply a stored theme before the first
+ * paint (mirroring the school site's own bootstrap and its `theme` key), and reveal sections as
+ * they scroll in. Two things keep the reveal from ever becoming a way to hide the page: the
+ * styles are scoped to a `js` class this script sets, so scripting off means nothing is hidden
+ * in the first place, and a timer shows everything after 1.2s regardless -- an observer that
+ * never fires (a background tab, a browser that throttles it, a layout that never intersects)
+ * must cost an animation, not the content.
  */
-const THEME_SCRIPT = `(function(){var r=document.documentElement;try{var s=localStorage.getItem('theme');if(s==='light'||s==='dark'){r.dataset.theme=s}}catch(e){}
-document.addEventListener('click',function(e){var t=e.target.closest&&e.target.closest('[data-theme-toggle]');if(!t)return;var dark=getComputedStyle(r).colorScheme==='dark';var next=dark?'light':'dark';r.dataset.theme=next;try{localStorage.setItem('theme',next)}catch(err){}})})()`
+const PAGE_SCRIPT = `(function(){var r=document.documentElement;try{var s=localStorage.getItem('theme');if(s==='light'||s==='dark'){r.dataset.theme=s}}catch(e){}
+r.className+=' js';
+document.addEventListener('click',function(e){var t=e.target.closest&&e.target.closest('[data-theme-toggle]');if(!t)return;var dark=getComputedStyle(r).colorScheme==='dark';var next=dark?'light':'dark';r.dataset.theme=next;try{localStorage.setItem('theme',next)}catch(err){}});
+document.addEventListener('DOMContentLoaded',function(){var els=[].slice.call(document.querySelectorAll('[data-reveal]'));if(!window.IntersectionObserver){els.forEach(function(el){el.classList.add('in')});return}
+var io=new IntersectionObserver(function(entries){entries.forEach(function(entry){if(entry.isIntersecting){entry.target.classList.add('in');io.unobserve(entry.target)}})},{rootMargin:'0px 0px -8% 0px'});
+els.forEach(function(el,i){el.style.setProperty('--delay',(i%6)*60+'ms');io.observe(el)});setTimeout(function(){els.forEach(function(el){el.classList.add('in')})},1200)})})()`
 
 const DARK_TOKENS = `
   color-scheme: dark;
-  --mv-border: rgba(125, 211, 252, 0.22);
-  --mv-border-strong: rgba(125, 211, 252, 0.42);
-  --mv-accent: #7dd3fc;
-  --mv-text: #f8fafc;
-  --mv-text-muted: #b8c5d6;
-  --mv-text-faint: rgba(226, 232, 240, 0.72);
-  --app-bg:
-    radial-gradient(circle at 15% 15%, rgba(14, 165, 233, 0.22), transparent 42%),
-    radial-gradient(circle at 80% 0%, rgba(37, 99, 235, 0.18), transparent 42%),
-    linear-gradient(180deg, #0b1628 0%, #07111f 55%, #04090f 100%);
-  --mv-header-bg: rgba(7, 17, 31, 0.9);
-  --mv-surface-hero: rgba(20, 45, 74, 0.58);
-  --mv-surface-card: rgba(15, 23, 42, 0.78);
-  --mv-surface-soft: rgba(30, 41, 59, 0.62);
-  --mv-surface-muted: rgba(15, 23, 42, 0.58);
-  --mv-surface-accent: rgba(125, 211, 252, 0.14);
-  --mv-status-success: #bbf7d0;
-  --mv-status-warning: #fde68a;
-  --mv-shadow-card: 0 25px 40px rgba(0, 0, 0, 0.28);
+  --line: rgba(148, 180, 214, 0.16);
+  --line-strong: rgba(125, 211, 252, 0.34);
+  --accent: #7dd3fc;
+  --accent-contrast: #082f49;
+  --text: #f8fafc;
+  --text-muted: #aab8c9;
+  --text-faint: rgba(226, 232, 240, 0.62);
+  --page-bg:
+    radial-gradient(1200px 600px at 12% -8%, rgba(14, 165, 233, 0.16), transparent 60%),
+    radial-gradient(900px 500px at 88% 4%, rgba(37, 99, 235, 0.14), transparent 55%),
+    linear-gradient(180deg, #0b1628 0%, #07111f 55%, #050c15 100%);
+  --header-bg: rgba(7, 17, 31, 0.72);
+  --surface: rgba(15, 23, 42, 0.72);
+  --surface-strong: rgba(17, 27, 48, 0.86);
+  --surface-soft: rgba(30, 41, 59, 0.5);
+  --surface-accent: rgba(125, 211, 252, 0.12);
+  --status-ok: #6ee7b7;
+  --status-warn: #fcd34d;
+  --shadow: 0 24px 60px rgba(2, 8, 20, 0.5);
 `
 
 const STYLES = `
 :root {
   color-scheme: light;
-  --mv-border: rgba(37, 99, 235, 0.16);
-  --mv-border-strong: rgba(37, 99, 235, 0.28);
-  --mv-accent: #2563eb;
-  --mv-text: #0f172a;
-  --mv-text-muted: #475569;
-  --mv-text-faint: rgba(71, 85, 105, 0.8);
-  --app-bg:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.16), transparent 32%),
-    radial-gradient(circle at 85% 12%, rgba(14, 165, 233, 0.14), transparent 30%),
-    linear-gradient(180deg, #f8fbff 0%, #eef5ff 58%, #e7effc 100%);
-  --mv-header-bg: rgba(248, 251, 255, 0.86);
-  --mv-surface-hero: rgba(219, 234, 254, 0.55);
-  --mv-surface-card: rgba(255, 255, 255, 0.86);
-  --mv-surface-soft: rgba(226, 239, 255, 0.72);
-  --mv-surface-muted: rgba(239, 246, 255, 0.74);
-  --mv-surface-accent: rgba(37, 99, 235, 0.1);
-  --mv-status-success: #15803d;
-  --mv-status-warning: #b45309;
-  --mv-shadow-card: 0 18px 40px rgba(37, 99, 235, 0.12);
-  --page-width: min(1100px, 100%);
-  --page-padding: clamp(1rem, 3vw + 0.5rem, 3rem);
+  --line: rgba(15, 23, 42, 0.1);
+  --line-strong: rgba(37, 99, 235, 0.26);
+  --accent: #2563eb;
+  --accent-contrast: #ffffff;
+  --text: #0b1220;
+  --text-muted: #4a5568;
+  --text-faint: rgba(71, 85, 105, 0.78);
+  --page-bg:
+    radial-gradient(1200px 600px at 12% -8%, rgba(59, 130, 246, 0.14), transparent 60%),
+    radial-gradient(900px 500px at 88% 4%, rgba(14, 165, 233, 0.12), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #f6f9ff 55%, #eef4fd 100%);
+  --header-bg: rgba(255, 255, 255, 0.72);
+  --surface: rgba(255, 255, 255, 0.9);
+  --surface-strong: #ffffff;
+  --surface-soft: rgba(240, 245, 255, 0.8);
+  --surface-accent: rgba(37, 99, 235, 0.08);
+  --status-ok: #047857;
+  --status-warn: #b45309;
+  --shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+  --page-width: min(1180px, 100%);
+  --page-padding: clamp(1.15rem, 4vw, 3.5rem);
+  --header-height: 68px;
 }
 :root[data-theme='dark'] {${DARK_TOKENS}}
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {${DARK_TOKENS}}
 }
 * { box-sizing: border-box; }
+/* The gradient is painted once, fixed, on body; the canvas underneath still needs a colour or
+   an overscroll past the end of the document flashes the browser default -- black in dark mode. */
+html { scroll-behavior: smooth; background-color: #f6f9ff; }
+:root[data-theme='dark'] { background-color: #07111f; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) { background-color: #07111f; }
+}
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--app-bg) fixed;
-  color: var(--mv-text);
+  background: var(--page-bg) fixed;
+  color: var(--text);
   font-family: 'Plus Jakarta Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'Helvetica Neue', sans-serif;
-  font-size: 15px;
+  font-size: 15.5px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
+.shell { width: var(--page-width); margin: 0 auto; padding-inline: var(--page-padding); }
+
 .header {
   position: sticky;
   top: 0;
-  z-index: 10;
-  background: var(--mv-header-bg);
-  border-bottom: 1px solid var(--mv-border);
-  backdrop-filter: blur(12px);
-}
-.header-inner,
-.shell {
-  width: var(--page-width);
-  margin: 0 auto;
-  padding-inline: var(--page-padding);
-}
-.header-inner {
+  z-index: 20;
+  height: var(--header-height);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-block: 0.9rem;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: saturate(180%) blur(14px);
 }
-.logo { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; letter-spacing: -0.01em; }
+.header-inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; }
+.logo { display: flex; align-items: center; gap: 0.65rem; font-weight: 700; letter-spacing: -0.015em; }
 .logo-mark {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: var(--mv-surface-accent);
-  border: 1px solid var(--mv-border-strong);
-  color: var(--mv-accent);
-  font-size: 0.9rem;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
+.header-right { display: flex; align-items: center; gap: 0.5rem; }
+.header-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.92rem;
+  font-weight: 600;
+  padding: 0.35rem 0.7rem;
+  border-radius: 8px;
+}
+.header-link:hover { color: var(--text); background: var(--surface-accent); }
 .theme-toggle {
-  border: 1px solid var(--mv-border-strong);
-  background: var(--mv-surface-card);
+  border: 1px solid var(--line);
+  background: var(--surface);
   color: inherit;
-  border-radius: 999px;
-  width: 36px;
-  height: 36px;
+  border-radius: 10px;
+  width: 34px;
+  height: 34px;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   line-height: 1;
 }
-.theme-toggle:hover { border-color: var(--mv-accent); }
-main { padding-block: clamp(1.5rem, 4vw, 3rem) clamp(2rem, 5vw, 3.5rem); }
-.hero {
-  border: 1px solid var(--mv-border);
-  border-radius: 36px;
-  background: var(--mv-surface-hero);
-  box-shadow: var(--mv-shadow-card);
-  padding: clamp(1.5rem, 4vw, 2.75rem);
+.theme-toggle:hover { border-color: var(--line-strong); }
+
+/* The first screen is the proposition; the list is one scroll away, which is also why the
+   header keeps a link straight to it for anyone who does not want the trip. */
+.hero { min-height: calc(100svh - var(--header-height)); display: grid; align-items: center; }
+.hero-inner { padding-block: clamp(3rem, 9vh, 6rem); }
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.eyebrow::before {
+  content: '';
+  width: 1.6rem;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.6;
+}
+h1 {
+  margin: 1.1rem 0 0;
+  font-size: clamp(2.4rem, 6vw, 4.25rem);
+  line-height: 1.04;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  max-width: 18ch;
+}
+.lead {
+  margin: 1.1rem 0 0;
+  max-width: 54ch;
+  font-size: clamp(1rem, 1.6vw, 1.15rem);
+  color: var(--text-muted);
+}
+.stats {
+  margin-top: clamp(2.25rem, 6vh, 3.5rem);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, max-content));
+  gap: clamp(1.5rem, 5vw, 4rem);
+  /* The last figure is a phrase set smaller than the numerals; align on the labels so the row
+     still reads as one line rather than three of slightly different heights. */
+  align-items: end;
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+}
+.stat-value {
+  margin: 0;
+  font-size: clamp(1.7rem, 3.4vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.stat.wide .stat-value { font-size: clamp(1.15rem, 2vw, 1.6rem); letter-spacing: -0.02em; }
+.stat-label {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.cue {
+  margin-top: clamp(2rem, 6vh, 3.25rem);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.cue .arrow {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  animation: nudge 2.4s ease-in-out infinite;
+}
+.cue:hover { color: var(--accent); }
+@keyframes nudge {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(3px); }
+}
+
+.directories { padding-block: clamp(3rem, 8vh, 5rem) clamp(3rem, 8vh, 5rem); scroll-margin-top: var(--header-height); }
+.section-head {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
+  align-items: baseline;
   justify-content: space-between;
+  gap: 0.75rem 2rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--line);
 }
-.hero-copy { max-width: 34rem; display: flex; flex-direction: column; gap: 0.85rem; }
-.label {
-  align-self: flex-start;
-  padding: 0.2rem 0.85rem;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  border: 1px solid var(--mv-border-strong);
-  background: var(--mv-surface-accent);
-  color: var(--mv-accent);
-}
-.hero h1 { margin: 0; font-size: clamp(2rem, 4vw, 3rem); font-weight: 700; letter-spacing: -0.02em; }
-.hero p { margin: 0; color: var(--mv-text-muted); }
-.stats { display: flex; flex-wrap: wrap; gap: 0.85rem; align-content: flex-start; }
-.stat {
-  min-width: 150px;
-  border: 1px solid var(--mv-border);
-  border-radius: 20px;
-  background: var(--mv-surface-soft);
-  padding: 1rem 1.25rem;
-}
-.stat-label { margin: 0; font-size: 0.9rem; color: var(--mv-text-faint); }
-.stat-value { margin: 0.2rem 0 0; font-size: 1.75rem; font-weight: 700; color: var(--mv-accent); }
+.section-head h2 { margin: 0; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
+.section-note { margin: 0; color: var(--text-faint); font-size: 0.9rem; }
+
 .schools {
-  margin-top: clamp(1.5rem, 4vw, 2.5rem);
+  margin-top: 1.75rem;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.1rem;
 }
-/* One school must not be stretched across the full width, nor squeezed into a third of it. */
-.schools.single { grid-template-columns: minmax(0, 34rem); }
+.schools.single { grid-template-columns: minmax(0, 36rem); }
 .school {
-  position: relative;
-  border: 1px solid var(--mv-border);
-  border-radius: 24px;
-  background: var(--mv-surface-card);
-  box-shadow: var(--mv-shadow-card);
-  padding: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.7rem;
+  padding: 1.6rem;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
   color: inherit;
   text-decoration: none;
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
-.school:hover, .school:focus-visible { border-color: var(--mv-border-strong); transform: translateY(-2px); }
-.school:focus-visible { outline: 2px solid var(--mv-accent); outline-offset: 3px; }
-.school:hover .visit, .school:focus-visible .visit { text-decoration: underline; }
-.school:hover h2 { color: var(--mv-accent); }
-.school.stale, .school.unavailable { border-style: dashed; background: var(--mv-surface-muted); }
-.school h2 { margin: 0; font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; transition: color 0.2s ease; }
+.school:hover, .school:focus-visible {
+  border-color: var(--line-strong);
+  transform: translateY(-3px);
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.12);
+}
+.school:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.school.stale, .school.unavailable { background: var(--surface-soft); }
+.school-top { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.host { font-size: 0.82rem; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.school h3 { margin: 0; font-size: 1.3rem; font-weight: 700; letter-spacing: -0.02em; transition: color 0.2s ease; }
+.school:hover h3 { color: var(--accent); }
 .badge {
-  align-self: flex-start;
-  margin: 0;
-  padding: 0.1rem 0.7rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  letter-spacing: 0.05em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  border: 1px solid var(--mv-border-strong);
-  background: var(--mv-surface-accent);
 }
-.badge::before {
-  content: '';
-  display: inline-block;
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  margin-right: 0.4rem;
-  vertical-align: 0.05rem;
-  background: currentColor;
+.badge::before { content: ''; width: 0.45rem; height: 0.45rem; border-radius: 50%; background: currentColor; }
+.badge.ok { color: var(--status-ok); }
+.badge.warn { color: var(--status-warn); }
+.address { margin: -0.2rem 0 0; color: var(--text-muted); font-size: 0.9rem; }
+.counts { margin: 0.2rem 0 0; color: var(--text-faint); font-size: 0.9rem; }
+.counts b {
+  display: block;
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
 }
-.badge.ok { color: var(--mv-status-success); }
-.badge.warn { color: var(--mv-status-warning); }
-.address { margin: 0; color: var(--mv-text-muted); font-size: 0.92rem; }
-.counts { margin: 0; color: var(--mv-text-muted); }
-.counts b { font-size: 1.9rem; font-weight: 700; color: var(--mv-accent); margin-right: 0.35rem; }
-.categories { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; padding: 0; margin: 0; }
+.categories { display: flex; flex-wrap: wrap; gap: 0.35rem; list-style: none; padding: 0; margin: 0.15rem 0 0; }
 .categories li {
-  border: 1px solid var(--mv-border);
-  background: var(--mv-surface-soft);
-  border-radius: 999px;
-  padding: 0.1rem 0.7rem;
-  font-size: 0.82rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--line);
+  background: var(--surface-accent);
+  border-radius: 8px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
-.categories b { margin-left: 0.35rem; color: var(--mv-accent); }
-.categories .more { color: var(--mv-text-faint); background: transparent; border-style: dashed; }
-.freshness, .note { margin: 0; font-size: 0.85rem; color: var(--mv-text-faint); }
-.note { color: var(--mv-status-warning); }
-.visit {
+.categories b { color: var(--text); font-variant-numeric: tabular-nums; }
+.categories .more { background: transparent; border-style: dashed; color: var(--text-faint); }
+.note { margin: 0; font-size: 0.85rem; color: var(--status-warn); }
+.school-foot {
   margin-top: auto;
-  padding-top: 0.35rem;
-  color: var(--mv-accent);
-  font-weight: 600;
-  font-size: 0.92rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.86rem;
 }
+.freshness { color: var(--text-faint); }
+.visit { color: var(--accent); font-weight: 700; margin-left: auto; }
+.school:hover .visit, .school:focus-visible .visit { text-decoration: underline; }
 .empty {
-  border: 1px dashed var(--mv-border-strong);
-  border-radius: 24px;
-  background: var(--mv-surface-muted);
-  color: var(--mv-text-muted);
-  padding: 1.25rem 1.5rem;
-  margin-top: 1.5rem;
+  margin-top: 1.75rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: 18px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  padding: 1.5rem;
 }
 .footer {
-  margin-top: clamp(2rem, 5vw, 3rem);
+  margin-top: clamp(2.5rem, 6vh, 4rem);
   padding-top: 1.25rem;
-  border-top: 1px solid var(--mv-border);
-  color: var(--mv-text-faint);
-  font-size: 0.85rem;
+  border-top: 1px solid var(--line);
+  color: var(--text-faint);
+  font-size: 0.84rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem 1.5rem;
+  gap: 0.4rem 2rem;
   justify-content: space-between;
 }
-@media (max-width: 720px) {
-  .hero { border-radius: 24px; }
-  .stats { width: 100%; }
-  .stat { flex: 1 1 140px; }
+
+/* Scoped to .js: with scripting off nothing ever adds .in, and an invisible page would be a
+   far worse outcome than an unanimated one. */
+.js [data-reveal] { opacity: 0; transform: translateY(14px); }
+.js [data-reveal].in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.5s ease var(--delay, 0ms), transform 0.5s cubic-bezier(0.22, 1, 0.36, 1) var(--delay, 0ms);
+}
+@media (max-width: 760px) {
+  :root { --header-height: 60px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem 1.5rem; }
   .schools.single { grid-template-columns: minmax(0, 1fr); }
+  .header-link { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .school, .school h2 { transition: none; }
+  html { scroll-behavior: auto; }
+  .school, .school h3 { transition: none; }
   .school:hover, .school:focus-visible { transform: none; }
+  .cue .arrow { animation: none; }
+  .js [data-reveal] { opacity: 1; transform: none; }
 }
 `
 
@@ -418,9 +526,9 @@ export const renderPage = (schools: PageSchool[], options: RenderOptions = {}): 
   const body =
     sorted.length === 0
       ? '<p class="empty">No schools yet. Verify a school and it appears here.</p>'
-      : `<section class="schools${sorted.length === 1 ? ' single' : ''}">${sorted
+      : `<div class="schools${sorted.length === 1 ? ' single' : ''}">${sorted
           .map((school) => renderSchool(school, now, staleAfterMs))
-          .join('\n')}</section>`
+          .join('\n')}</div>`
 
   return `<!doctype html>
 <html lang="en">
@@ -432,36 +540,49 @@ export const renderPage = (schools: PageSchool[], options: RenderOptions = {}): 
 <link rel="icon" href="${FAVICON}">
 <title>${escapeHtml(title)}</title>
 <style>${STYLES}</style>
-<script>${THEME_SCRIPT}</script>
+<script>${PAGE_SCRIPT}</script>
 </head>
 <body>
 <header class="header">
-  <div class="header-inner">
+  <div class="header-inner shell">
     <div class="logo"><span class="logo-mark" aria-hidden="true">HS</span>${escapeHtml(title)}</div>
-    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch light or dark theme">
-      <span aria-hidden="true">&#9681;</span>
-    </button>
+    <div class="header-right">
+      <a class="header-link" href="#directories">Directories</a>
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch light or dark theme">
+        <span aria-hidden="true">&#9681;</span>
+      </button>
+    </div>
   </div>
 </header>
-<main class="shell">
+<main>
   <section class="hero">
-    <div class="hero-copy">
-      <span class="label">Club directories</span>
-      <h1>${escapeHtml(title)}</h1>
-      <p>Every school below runs its own club directory. This page reads each site&#39;s public
-      summary and points you at the real thing -- it never holds a club, a member or a login.</p>
-    </div>
-    <div class="stats">
-      ${statCard('Schools', String(sorted.length))}
-      ${statCard('Clubs listed', String(clubs))}
-      ${statCard('Last checked', describeAge(lastPolled, now))}
+    <div class="hero-inner shell">
+      <span class="eyebrow">Club directories</span>
+      <h1>Every school&#39;s clubs, on the school&#39;s own site.</h1>
+      <p class="lead">Each school below runs its own directory. This page reads the public summary
+      each one publishes and sends you straight there. It holds no club, no member and no login of
+      its own.</p>
+      <div class="stats">
+        ${statCard('Schools', String(sorted.length))}
+        ${statCard('Clubs listed', String(clubs))}
+        ${statCard('Last checked', describeAge(lastPolled, now), true)}
+      </div>
+      <a class="cue" href="#directories">See the directories <span class="arrow" aria-hidden="true">&darr;</span></a>
     </div>
   </section>
-  ${body}
-  <footer class="footer">
-    <span>Pulled from each school&#39;s public summary. Nothing is ever written back.</span>
-    <span>Generated ${escapeHtml(now.toISOString())}</span>
-  </footer>
+  <section class="directories shell" id="directories">
+    <div class="section-head">
+      <h2>Directories</h2>
+      <p class="section-note">Verified schools only &middot; checked ${escapeHtml(
+        describeAge(lastPolled, now),
+      )}</p>
+    </div>
+    ${body}
+    <footer class="footer">
+      <span>Pulled from each school&#39;s public summary. Nothing is ever written back.</span>
+      <span>Generated ${escapeHtml(now.toISOString())}</span>
+    </footer>
+  </section>
 </main>
 </body>
 </html>
