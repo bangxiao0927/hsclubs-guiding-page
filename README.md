@@ -55,33 +55,40 @@ npm run verify:all            # check every listed school once
 npm run verify:watch          # check now, then every HSCLUBS_VERIFY_INTERVAL_MS (30d default)
 ```
 
+The page itself is a React app in [`web/`](web), built by Vite:
+
+```bash
+npm run build      # install web/ and build it into web/dist
+npm run web:dev    # Vite on :5173, proxying /api to a running `npm run serve`
+npm run web:test   # the app's own tests
+```
+
 `registry.json` and `data/` are gitignored. Everything is configurable by environment variable:
 `HSCLUBS_REGISTRY`, `HSCLUBS_STORE`, `HSCLUBS_POLL_INTERVAL_MS`, `HSCLUBS_PORT`, `HSCLUBS_HOST`,
-`HSCLUBS_PAGE_TITLE`, `HSCLUBS_VERIFY_INTERVAL_MS`. The server binds to localhost unless told
-otherwise: this is a private page on a personal machine, and answering the whole network is not
-something to turn on by accident.
+`HSCLUBS_PAGE_TITLE`, `HSCLUBS_VERIFY_INTERVAL_MS`, `HSCLUBS_WEB_DIR`. The server binds to
+localhost unless told otherwise: this is a private page on a personal machine, and answering the
+whole network is not something to turn on by accident.
 
 What a poll does: fetch that school's `/api/summary` with the stored `ETag`, and record the
 result. An unchanged school answers `304` and nothing is rewritten. A school that is down keeps
 its last good summary and gains a `lastError`, so the page can show a stale card with a reason
 instead of an empty one.
 
-The page is rendered from the store on each request -- no build step, no output file to keep in
-sync, and never staler than what the poller wrote. Everything on it came from someone else's
-server, so everything on it is escaped.
+`npm run serve` answers three things: `GET /api/schools` with what the poller last stored, the
+built app out of `web/dist`, and -- when nothing has been built -- a server-rendered page instead.
+That fallback is why the poller machine never has to keep a toolchain alive: a fresh checkout with
+`npm install && npm run serve` is a working page, and `npm run build` is what upgrades it to the
+app. Both read the store per request, so neither is ever staler than the last poll.
 
-It looks like a school site on purpose: the same palette and card language as the 1st repo's
-frontend, light and dark, so clicking a card through to a school does not feel like leaving for a
-different product. It opens on a full first screen -- what this is, and the figures that say
-whether it is alive -- with the directories one scroll below. Each card links to the school's own
-origin, which is the origin verification proved control of.
+The app looks like a school site on purpose: the same palette and card language as the 1st repo's
+frontend, light and dark, sharing its `theme` key so a visitor who chose dark over there arrives
+here already dark. It opens on a full first screen -- what this is, and the figures that say
+whether it is alive -- with the directories one scroll below, searchable by school or host,
+sortable, filterable by category, and with a detail drawer for what a card has no room for. The
+one link that leaves goes to the school's own origin: the origin verification proved control of.
 
-Typography comes from Google Fonts and the rest is hand-written CSS; there is still no framework
-and no build step, because the content is a handful of schools and a bundle would put a compile
-between the poller writing a number and a visitor seeing it. The rule the page keeps is narrower
-than "download nothing": every *fact* is in the HTML the server sends. Counters animate towards a
-number already printed, reveal-on-scroll only ever hides what its own script unhid, and no
-executable code is fetched from anywhere -- so a blocked font costs a font, never a number.
+Everything on the page came from someone else's server. React escapes what it renders, the
+server-rendered fallback escapes by hand, and neither ever executes anything a school supplied.
 
 Typical operation is two processes: `npm run watch` and `npm run serve`.
 

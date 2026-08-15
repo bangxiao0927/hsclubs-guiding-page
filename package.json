@@ -16,6 +16,10 @@
     "verify": "tsx src/cli.ts verify",
     "verify:all": "tsx src/cli.ts verify:all",
     "verify:watch": "tsx src/cli.ts verify:watch",
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "web:test": "npm --prefix web run test",
+    "build": "npm --prefix web ci && npm --prefix web run build",
     "test": "vitest --run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
