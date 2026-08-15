@@ -21,7 +21,7 @@ const school = (overrides: Partial<School> = {}): School => ({
       publishedAt: null,
   lastUpdatedAt: '2026-08-09T11:00:00Z',
   lastPolledAt: '2026-08-09T11:59:00Z',
-  lastError: null,
+  lastError: null,  history: [],  trend: null,
   ...overrides,
 })
 

@@ -23,6 +23,9 @@ export interface School {
   checkedAge: string
   publishedAt: string | null
   lastUpdatedAt: string | null
+  history: { at: string; clubCount: number }[]
+  /** Net change over the stored window, or null when there is nothing to compare. */
+  trend: number | null
   lastPolledAt: string | null
   lastError: string | null
 }

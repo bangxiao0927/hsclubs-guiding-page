@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 
+import { alertsFor, describeAlert, sendAlerts } from './alerts.js'
 import { staleBuildWarning } from './buildFreshness.js'
 import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
 import { saveRegistry, withRegistryLock } from './registry.js'
@@ -10,7 +11,7 @@ import { pollSchool } from './pollSchool.js'
 import { renderPage } from './renderPage.js'
 import { runOnInterval } from './schedule.js'
 import { createPageServer } from './serve.js'
-import { SchoolStore } from './store.js'
+import { SchoolStore, type SchoolRecord } from './store.js'
 import { verifyAllSchools } from './verifyAll.js'
 import { challengeUrlFor, issueVerificationToken, verifySchool } from './verifySchool.js'
 
@@ -58,6 +59,33 @@ const pageHost = () => process.env['HSCLUBS_HOST'] ?? '127.0.0.1'
 const webDir = () => process.env['HSCLUBS_WEB_DIR'] ?? fileURLToPath(new URL('../web/dist', import.meta.url))
 const verificationIntervalMs = () =>
   positiveNumber('HSCLUBS_VERIFY_INTERVAL_MS', 30 * 24 * 60 * 60 * 1000)
+const alertWebhook = () => process.env['HSCLUBS_ALERT_WEBHOOK'] ?? ''
+/** Three hourly failures is a school that is actually down, not one that was restarting. */
+const alertAfter = () => positiveNumber('HSCLUBS_ALERT_AFTER', 3)
+
+/**
+ * Reports the transitions in a pass: to the console always, and to a webhook if one is set.
+ *
+ * Console first, so an operator watching the log learns the same thing as the webhook, and so
+ * that a misconfigured webhook is not the difference between knowing and not knowing.
+ */
+const reportAlerts = async (
+  previous: Map<string, SchoolRecord>,
+  store: SchoolStore,
+): Promise<void> => {
+  const events = alertsFor(previous, store.all(), alertAfter())
+  if (events.length === 0) return
+  for (const event of events) console.error(`ALERT: ${describeAlert(event)}`)
+
+  const webhook = alertWebhook()
+  if (!webhook) return
+  if (!(await sendAlerts(webhook, events))) {
+    console.error(`Could not deliver ${events.length} alert(s) to HSCLUBS_ALERT_WEBHOOK`)
+  }
+}
+
+const snapshot = (store: SchoolStore): Map<string, SchoolRecord> =>
+  new Map(store.all().map((record) => [record.slug, record]))
 
 const loadPollable = async (): Promise<SchoolEntry[]> => pollableSchools(await loadRegistry(registryPath()))
 
@@ -101,10 +129,12 @@ const runOnePass = async (): Promise<number> => {
   }
 
   const store = await SchoolStore.open(storePath())
+  const before = snapshot(store)
   const report = await pollAllSchools(entries, store, {
     onSchool: ({ slug, outcome, error }) =>
       console.log(`${slug}: ${outcome}${error ? ` -- ${error}` : ''}`),
   })
+  await reportAlerts(before, store)
 
   console.log(
     `pass done: ${report.updated} updated, ${report.unchanged} unchanged, ${report.failed} failed`,
@@ -132,10 +162,12 @@ const watch = async (): Promise<number> => {
       // restart -- the operator edits a file, and the next pass respects it.
       const entries = await loadPollable()
       const store = await SchoolStore.open(storePath())
+      const before = snapshot(store)
       const report = await pollAllSchools(entries, store)
       console.log(
         `${report.startedAt}: ${report.updated} updated, ${report.unchanged} unchanged, ${report.failed} failed`,
       )
+      await reportAlerts(before, store)
     },
     {
       intervalMs: interval,
