@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 
+import { staleBuildWarning } from './buildFreshness.js'
 import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
 import { saveRegistry, withRegistryLock } from './registry.js'
 import { pageSchools } from './pageData.js'
@@ -186,6 +187,11 @@ const serve = async (): Promise<number> => {
     console.error(listening)
     return 1
   }
+
+  // After the port is open, because a stale build is worth knowing about but is never a reason
+  // to refuse to serve.
+  const stale = await staleBuildWarning(webDir(), fileURLToPath(new URL('../web/src', import.meta.url)))
+  if (stale) console.error(stale)
 
   await new Promise<void>((resolve) => {
     for (const signal of ['SIGINT', 'SIGTERM'] as const) {

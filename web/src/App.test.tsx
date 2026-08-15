@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { App } from './App'
 import type { PagePayload } from './types'
@@ -52,6 +52,9 @@ const answerWith = (body: PagePayload | null, ok = true) =>
     vi.fn(async () => ({ ok, status: ok ? 200 : 503, json: async () => body })) as unknown as typeof fetch,
   )
 
+// The view lives in the URL, and jsdom keeps one address for the whole file: without this a
+// test that types a query silently filters the next test's page.
+beforeEach(() => history.replaceState(null, '', '/'))
 afterEach(() => vi.unstubAllGlobals())
 
 describe('the directory page', () => {
@@ -75,11 +78,33 @@ describe('the directory page', () => {
     expect(screen.getByText('Demo High School')).toBeInTheDocument()
 
     await user.clear(screen.getByPlaceholderText(/search by school/i))
-    await user.click(screen.getByRole('button', { name: 'STEM' }))
+    await user.click(screen.getByRole('button', { name: /^STEM/ }))
     expect(screen.queryByText('Demo High School')).not.toBeInTheDocument()
 
     await user.type(screen.getByPlaceholderText(/search by school/i), 'demo')
     expect(screen.getByText(/no school matches that/i)).toBeInTheDocument()
+  })
+
+  // A directory people send each other has to survive a copied link and a reload.
+  it('keeps the search, sort and filters in the address', async () => {
+    answerWith(payload)
+    render(<App />)
+    const user = userEvent.setup()
+
+    await user.type(await screen.findByPlaceholderText(/search by school/i), 'demo')
+    await waitFor(() => expect(location.search).toContain('q=demo'))
+
+    await user.click(screen.getByRole('button', { name: 'Reset' }))
+    await waitFor(() => expect(location.search).toBe(''))
+  })
+
+  // Counting against the search rather than the chosen facets keeps the numbers meaningful.
+  it('says how many schools each category covers, and how many are showing', async () => {
+    answerWith(payload)
+    render(<App />)
+
+    expect(await screen.findByRole('button', { name: /^Service 1/ })).toBeInTheDocument()
+    expect(screen.getByText('2 schools')).toBeInTheDocument()
   })
 
   it('opens the drawer with everything the card had no room for, and closes on Escape', async () => {
