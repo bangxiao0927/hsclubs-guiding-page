@@ -98,12 +98,11 @@ app. Both read the store per request, so neither is ever staler than the last po
 
 The app looks like a school site on purpose: the same palette and card language as the 1st repo's
 frontend, light and dark, sharing its `theme` key so a visitor who chose dark over there arrives
-here already dark. It opens on a full first screen -- what this is, and the figures that say
-whether it is alive -- beside an interactive network that cycles through the connected schools
-and pauses as soon as someone points at it or moves focus into it. The directories sit one scroll
-below, reveal as they enter the viewport, and are searchable by school or host, sortable,
-filterable by category, and backed by a detail drawer for what a card has no room for. The one
-link that leaves goes to the school's own origin: the origin verification proved control of.
+here already dark. It opens directly on a full-bleed orthographic globe -- no marketing panel or
+bordered map card in front of it -- and the directories start below. They reveal as they enter the
+viewport and are searchable by school or host, sortable, filterable by category, and backed by a
+detail drawer for what a card has no room for. The one link that leaves goes to the school's own
+origin: the origin verification proved control of.
 
 The nine-dot launcher in the header is an app switcher: it keeps the current Guide distinct from
 the independent school apps, names the host before a visitor leaves, and carries live/demo status
@@ -111,12 +110,17 @@ into the choice. Mobile adds the same switcher to a thumb-reachable bottom dock 
 and Browse. Category facets become one horizontally scrolling, snap-aligned rail on a narrow
 screen rather than fourteen chips pushing the actual schools several screens down.
 
-Under the hero is a half-height map of the network. Coordinates come only from `location` in the
-registry -- confirmed by the operator, never geocoded from an address -- so a school without one
-is counted as awaiting a location instead of being pinned to a guess. Choosing a pin animates a
-pan and zoom to that school; the labels are HTML above the SVG, so they stay legible at every
-zoom and are reachable by keyboard. The basemap is a simplified land outline vendored into the
-bundle, which means no tile server ever learns who is reading this page.
+Coordinates come only from `location` in the registry -- confirmed by the operator, never guessed
+from an absent address -- so a school without one is counted as awaiting a location instead of
+being pinned arbitrarily. Choosing a pin animates a spherical rotation and zoom; the labels are
+HTML above the SVG, so they stay legible and keyboard reachable. The basemap is a simplified land
+outline vendored into the bundle, which means no tile server ever learns who is reading this page.
+
+With two or more mapped schools, the globe is a live tour: it starts on the first real school and
+rotates to the next one every 5.2 seconds. The progress line shows when the camera will move;
+touching a pin or moving keyboard focus into the map pauses it, and **Resume tour** makes the
+motion explicit again. Demo coordinates may be illustrative, but real-school coordinates are
+confirmed against the school's known address before they enter the operated registry.
 
 An entry with `"demo": true` is rendered with a **Demonstration** badge and an explanation in
 its drawer. This matters because origin verification proves control of a host; it does not turn
