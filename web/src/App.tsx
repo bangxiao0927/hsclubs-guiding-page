@@ -3,8 +3,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Controls } from './components/Controls'
 import { Header } from './components/Header'
 import { Hero } from './components/Hero'
+import { MobileDock } from './components/MobileDock'
 import { SchoolCard } from './components/SchoolCard'
 import { SchoolDrawer } from './components/SchoolDrawer'
+import { SchoolSwitcher } from './components/SchoolSwitcher'
 import { filterByCategories, searchSchools, sortSchools, type SortKey } from './filters'
 import type { PagePayload, School } from './types'
 import { useTheme } from './useTheme'
@@ -41,6 +43,7 @@ export const App = () => {
   const [theme, toggleTheme] = useTheme()
   const [view, setView] = useState(() => readViewState(location.search))
   const [open, setOpen] = useState<School | null>(null)
+  const [switcher, setSwitcher] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -118,8 +121,13 @@ export const App = () => {
 
   return (
     <>
-      <Header title={payload?.title ?? 'HS Clubs'} theme={theme} onToggleTheme={toggleTheme} />
-      <main>
+      <Header
+        title={payload?.title ?? 'HS Clubs'}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onOpenSwitcher={() => setSwitcher(true)}
+      />
+      <main id="top" className="pb-24 sm:pb-0">
         <Hero totals={totals} schools={schools} />
         <section
           id="directories"
@@ -198,6 +206,8 @@ export const App = () => {
         </section>
       </main>
       <SchoolDrawer school={open} onClose={() => setOpen(null)} />
+      <SchoolSwitcher schools={schools} open={switcher} onClose={() => setSwitcher(false)} />
+      <MobileDock onOpenSwitcher={() => setSwitcher(true)} />
     </>
   )
 }

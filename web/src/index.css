@@ -128,6 +128,14 @@ body::after {
   font-family: var(--display);
 }
 
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 .card-edge::before {
   content: '';
   position: absolute;

@@ -38,7 +38,7 @@ export const Hero = ({
             How verification works
           </a>
         </div>
-        <div className="mt-[clamp(2.5rem,6vh,3.5rem)] grid grid-cols-2 items-end gap-6 border-t border-[var(--line)] pt-6 sm:grid-cols-[repeat(3,max-content)] sm:gap-[clamp(1.5rem,4vw,3.5rem)]">
+        <div className="mt-[clamp(2.5rem,6vh,3.5rem)] grid grid-cols-2 items-end gap-6 border-t border-[var(--line)] pt-6 [&>div:last-child]:col-span-2 sm:grid-cols-[repeat(3,max-content)] sm:gap-[clamp(1.5rem,4vw,3.5rem)] sm:[&>div:last-child]:col-span-1">
           <Stat label="Schools" value={totals.schools} />
           <Stat label="Clubs listed" value={totals.clubs} />
           <Stat label="Last checked" value={totals.checkedAge} />

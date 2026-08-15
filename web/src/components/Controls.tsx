@@ -44,12 +44,12 @@ export const Controls = ({
             className="w-full rounded-xl border border-[var(--line)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-[0.95rem] outline-none transition focus:border-[var(--line-strong)] focus:ring-2 focus:ring-[var(--accent)]/30"
           />
         </label>
-        <label className="flex items-center gap-2 text-[0.85rem] text-[var(--text-faint)]">
+        <label className="flex w-full items-center justify-between gap-2 text-[0.85rem] text-[var(--text-faint)] sm:w-auto sm:justify-start">
           Sort
           <select
             value={sort}
             onChange={(event) => onSort(event.target.value as SortKey)}
-            className="cursor-pointer rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-[0.9rem] text-[var(--text)] outline-none transition focus:border-[var(--line-strong)]"
+            className="min-w-[150px] cursor-pointer rounded-xl border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-[0.9rem] text-[var(--text)] outline-none transition focus:border-[var(--line-strong)]"
           >
             {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
               <option key={key} value={key}>
@@ -60,7 +60,7 @@ export const Controls = ({
         </label>
       </div>
       {categories.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="no-scrollbar -mx-[1.15rem] flex snap-x snap-mandatory flex-nowrap items-center gap-1.5 overflow-x-auto px-[1.15rem] pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
           {categories.map(({ name, schools }) => {
             const active = selected.includes(name)
             // A category no school in the current search has is a dead end; say so rather than
@@ -73,7 +73,7 @@ export const Controls = ({
                 aria-pressed={active}
                 disabled={dead}
                 onClick={() => onToggleCategory(name)}
-                className={`rounded-[9px] border px-2.5 py-1 text-[0.78rem] transition ${
+                className={`shrink-0 snap-start rounded-[9px] border px-2.5 py-1 text-[0.78rem] transition ${
                   active
                     ? 'cursor-pointer border-transparent bg-[var(--accent)] text-white'
                     : dead

@@ -4,10 +4,12 @@ export const Header = ({
   title,
   theme,
   onToggleTheme,
+  onOpenSwitcher,
 }: {
   title: string
   theme: Theme
   onToggleTheme: () => void
+  onOpenSwitcher?: () => void
 }) => (
   <header className="sticky top-0 z-20 h-[70px] flex items-center border-b border-[var(--line)] bg-[var(--header-bg)] backdrop-blur-xl backdrop-saturate-150">
     <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-4 px-[clamp(1.15rem,4vw,3.5rem)]">
@@ -27,6 +29,18 @@ export const Header = ({
         >
           Directories
         </a>
+        {onOpenSwitcher && (
+          <button
+            type="button"
+            onClick={onOpenSwitcher}
+            aria-label="Switch school app"
+            className="grid h-9 w-9 cursor-pointer grid-cols-3 place-content-center gap-[2px] rounded-[10px] border border-[var(--line)] bg-[var(--surface)] transition hover:-translate-y-px hover:border-[var(--line-strong)]"
+          >
+            {Array.from({ length: 9 }, (_, index) => (
+              <span key={index} className="h-[3px] w-[3px] rounded-full bg-current" aria-hidden />
+            ))}
+          </button>
+        )}
         <button
           type="button"
           onClick={onToggleTheme}
