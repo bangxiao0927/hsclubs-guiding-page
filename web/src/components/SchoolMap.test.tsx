@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { School } from '../types'
 import { SchoolMap } from './SchoolMap'
@@ -30,6 +30,8 @@ const school = (slug: string, name: string, location: School['location']): Schoo
 const landPath = () => screen.getByTestId('globe-land').getAttribute('d')
 
 describe('SchoolMap', () => {
+  afterEach(() => vi.useRealTimers())
+
   it('plots only schools with confirmed coordinates and counts the rest', () => {
     render(
       <SchoolMap
@@ -63,8 +65,30 @@ describe('SchoolMap', () => {
     // The globe rotation is animated, so the projected land arrives over the next frames.
     await waitFor(() => expect(landPath()).not.toBe(world))
 
-    await user.click(screen.getByRole('button', { name: 'Show all' }))
-    expect(screen.getByText('Find a school directory')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Resume tour' }))
+    expect(screen.getByRole('heading', { name: 'Alpha High' })).toBeInTheDocument()
     await waitFor(() => expect(landPath()).toBe(world))
+  })
+
+  it('moves focus between schools as a tour until someone interacts', async () => {
+    vi.useFakeTimers()
+    render(
+      <SchoolMap
+        schools={[
+          school('a', 'Alpha High', { lat: 37.4, lon: -122.1 }),
+          school('b', 'Beta High', { lat: 35.7, lon: 139.7 }),
+        ]}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: 'Alpha High' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    await vi.advanceTimersByTimeAsync(5_200)
+    expect(screen.getByRole('button', { name: 'Beta High' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 })

@@ -82,12 +82,30 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
   const located = useMemo(() => schools.filter((school) => school.location), [schools])
   const missing = schools.length - located.length
   const overview = useMemo(() => meanCamera(located), [located])
-  const [focus, setFocus] = useState<string | null>(null)
+  // Start on a real school when there is one; a demo is useful context, not the default claim.
+  const first = located.find((school) => !school.demo) ?? located[0] ?? null
+  const [focus, setFocus] = useState<string | null>(first?.slug ?? null)
+  const [paused, setPaused] = useState(false)
+  const [cycle, setCycle] = useState(0)
   const active = located.find((school) => school.slug === focus) ?? null
 
   useEffect(() => {
     if (focus && !located.some((school) => school.slug === focus)) setFocus(null)
   }, [focus, located])
+
+  // Rotate the globe between schools so it remains a live map rather than a static screenshot.
+  // Any hover, touch or keyboard focus pauses it immediately; the user always outranks autoplay.
+  useEffect(() => {
+    if (paused || located.length < 2) return
+    const timer = window.setInterval(() => {
+      setFocus((current) => {
+        const index = located.findIndex((school) => school.slug === current)
+        return located[(index + 1) % located.length]?.slug ?? null
+      })
+      setCycle((value) => value + 1)
+    }, 5200)
+    return () => window.clearInterval(timer)
+  }, [located, paused])
 
   const target: Camera = active?.location
     ? { lon: active.location.lon, lat: active.location.lat, zoom: 1.55 }
@@ -111,6 +129,11 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
   return (
     <section
       aria-label="School map"
+      onPointerDown={() => setPaused(true)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false)
+      }}
       className="relative isolate h-[clamp(500px,72svh,760px)] w-full overflow-hidden bg-[var(--canvas)]"
     >
       {/* Atmospheric lights are attached to the map, so the globe grows out of the page rather
@@ -134,6 +157,14 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
         <p className="m-0 mt-1 text-sm text-[var(--text-muted)]">
           {located.length} mapped &middot; {schools.length} connected
         </p>
+        <div className="mt-3 h-0.5 w-28 overflow-hidden rounded-full bg-[var(--line)]">
+          <span
+            key={`${active?.slug ?? 'all'}-${cycle}`}
+            className={`block h-full origin-left bg-linear-90 from-[var(--accent)] to-[var(--accent-2)] ${
+              paused ? 'scale-x-0' : 'animate-[map-cycle_5.2s_linear_forwards]'
+            }`}
+          />
+        </div>
       </div>
 
       <svg
@@ -228,7 +259,10 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
             <button
               key={school.slug}
               type="button"
-              onClick={() => setFocus(selected ? null : school.slug)}
+              onClick={() => {
+                setFocus(school.slug)
+                setPaused(true)
+              }}
               aria-pressed={selected}
               style={{ left: `${(point[0] / WIDTH) * 100}%`, top: `${(point[1] / HEIGHT) * 100}%` }}
               className={`pointer-events-auto absolute z-10 max-w-[48vw] -translate-x-1/2 translate-y-4 cursor-pointer truncate rounded-xl border px-3 py-1.5 text-[0.75rem] font-bold shadow-xl backdrop-blur-md transition duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
@@ -265,10 +299,14 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
           {active && (
             <button
               type="button"
-              onClick={() => setFocus(null)}
+              onClick={() => {
+                setFocus(first?.slug ?? null)
+                setPaused(false)
+                setCycle((value) => value + 1)
+              }}
               className="cursor-pointer rounded-full border border-[var(--line)] bg-[var(--header-bg)] px-3 py-1.5 text-xs font-semibold backdrop-blur-xl transition hover:border-[var(--line-strong)]"
             >
-              Show all
+              {paused ? 'Resume tour' : 'Restart tour'}
             </button>
           )}
           <a
