@@ -47,10 +47,36 @@ describe('renderPage', () => {
     const html = renderPage([school()], { now: NOW })
 
     expect(html).toContain('<a class="school" href="https://mvhs.example.org"')
-    expect(html).toContain('Open mvhs.example.org')
+    expect(html).toContain('mvhs.example.org')
+    expect(html).toContain('Open site')
     expect(html).toContain('rel="noopener noreferrer"')
     // A link inside a link is invalid, and gives a keyboard user the same target twice.
-    expect(html.match(/<a /g)).toHaveLength(1)
+    const start = html.indexOf('<a class="school')
+    const card = html.slice(start, html.indexOf('</a>', start))
+    expect(card.slice(2)).not.toContain('<a ')
+  })
+
+  // The proposition first, the list one scroll down -- with a way to skip the trip.
+  it('puts the list below the first screen and links straight to it', () => {
+    const html = renderPage([school()], { now: NOW })
+
+    expect(html.indexOf('class="hero"')).toBeLessThan(html.indexOf('id="directories"'))
+    expect(html).toContain('href="#directories"')
+  })
+
+  // Reveal-on-scroll that starts hidden would leave a scripting-off browser with an empty
+  // page, which is far worse than an unanimated one.
+  it('only hides revealed sections once its own script has run', () => {
+    const html = renderPage([school()], { now: NOW })
+
+    expect(html).toContain('.js [data-reveal] { opacity: 0')
+    expect(html).not.toMatch(/\n\[data-reveal\] \{ opacity: 0/)
+  })
+
+  // An observer that never fires -- a background tab, a throttling browser, a layout that
+  // never intersects -- must cost the animation, not the content.
+  it('shows revealed sections on a timer even if the observer never fires', () => {
+    expect(renderPage([school()], { now: NOW })).toContain("classList.add('in')})},1200)")
   })
 
   it('sums the directories it is showing', () => {
