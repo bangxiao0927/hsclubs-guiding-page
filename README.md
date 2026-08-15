@@ -70,12 +70,18 @@ The page is rendered from the store on each request -- no build step, no output 
 sync, and never staler than what the poller wrote. Everything on it came from someone else's
 server, so everything on it is escaped.
 
-It looks like a school site on purpose: the same colour tokens, radii and card shadows as the 1st
-repo's frontend, light and dark, so clicking a card through to a school does not feel like leaving
-for a different product. Nothing is fetched to achieve that -- no web font, no stylesheet, no
-script from anywhere -- because the page has to render the same on a machine that is offline at
-the moment of the request. Each card links to the school's own origin, which is the origin
-verification proved control of.
+It looks like a school site on purpose: the same palette and card language as the 1st repo's
+frontend, light and dark, so clicking a card through to a school does not feel like leaving for a
+different product. It opens on a full first screen -- what this is, and the figures that say
+whether it is alive -- with the directories one scroll below. Each card links to the school's own
+origin, which is the origin verification proved control of.
+
+Typography comes from Google Fonts and the rest is hand-written CSS; there is still no framework
+and no build step, because the content is a handful of schools and a bundle would put a compile
+between the poller writing a number and a visitor seeing it. The rule the page keeps is narrower
+than "download nothing": every *fact* is in the HTML the server sends. Counters animate towards a
+number already printed, reveal-on-scroll only ever hides what its own script unhid, and no
+executable code is fetched from anywhere -- so a blocked font costs a font, never a number.
 
 Typical operation is two processes: `npm run watch` and `npm run serve`.
 
