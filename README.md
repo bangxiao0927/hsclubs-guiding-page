@@ -99,9 +99,11 @@ app. Both read the store per request, so neither is ever staler than the last po
 The app looks like a school site on purpose: the same palette and card language as the 1st repo's
 frontend, light and dark, sharing its `theme` key so a visitor who chose dark over there arrives
 here already dark. It opens on a full first screen -- what this is, and the figures that say
-whether it is alive -- with the directories one scroll below, searchable by school or host,
-sortable, filterable by category, and with a detail drawer for what a card has no room for. The
-one link that leaves goes to the school's own origin: the origin verification proved control of.
+whether it is alive -- beside an interactive network that cycles through the connected schools
+and pauses as soon as someone points at it or moves focus into it. The directories sit one scroll
+below, reveal as they enter the viewport, and are searchable by school or host, sortable,
+filterable by category, and backed by a detail drawer for what a card has no room for. The one
+link that leaves goes to the school's own origin: the origin verification proved control of.
 
 An entry with `"demo": true` is rendered with a **Demonstration** badge and an explanation in
 its drawer. This matters because origin verification proves control of a host; it does not turn

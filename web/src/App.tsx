@@ -120,13 +120,16 @@ export const App = () => {
     <>
       <Header title={payload?.title ?? 'HS Clubs'} theme={theme} onToggleTheme={toggleTheme} />
       <main>
-        <Hero totals={totals} />
+        <Hero totals={totals} schools={schools} />
         <section
           id="directories"
+          aria-labelledby="directories-title"
           className="mx-auto w-full max-w-[1200px] scroll-mt-[70px] px-[clamp(1.15rem,4vw,3.5rem)] pb-[clamp(3rem,8vh,5.5rem)] pt-[clamp(1.5rem,4vh,3rem)]"
         >
           <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-b border-[var(--line)] pb-5">
-            <h2 className="font-display m-0 text-[1.45rem] font-bold tracking-[-0.025em]">Directories</h2>
+            <h2 id="directories-title" className="font-display m-0 text-[1.45rem] font-bold tracking-[-0.025em]">
+              Directories
+            </h2>
             <p className="m-0 text-[0.9rem] text-[var(--text-faint)]">
               Verified schools only &middot; checked {totals.checkedAge}
             </p>
@@ -180,8 +183,8 @@ export const App = () => {
                       : '[grid-template-columns:repeat(auto-fit,minmax(330px,1fr))]'
                   }`}
                 >
-                  {visible.map((school) => (
-                    <SchoolCard key={school.slug} school={school} onOpen={setOpen} />
+                  {visible.map((school, index) => (
+                    <SchoolCard key={school.slug} school={school} index={index} onOpen={setOpen} />
                   ))}
                 </div>
               )}
