@@ -1,0 +1,200 @@
+@import 'tailwindcss';
+
+/* Colour is driven by CSS variables rather than Tailwind's dark: variant, because the theme has
+   three states -- stored light, stored dark, and follow the system -- and a variable set in one
+   place keeps all three honest. */
+:root {
+  color-scheme: light;
+  --line: rgba(15, 23, 42, 0.09);
+  --line-strong: rgba(37, 99, 235, 0.24);
+  --accent: #2563eb;
+  --accent-2: #7c3aed;
+  --text: #0a1121;
+  --text-muted: #4d5a6e;
+  --text-faint: rgba(71, 85, 105, 0.72);
+  --canvas: #f7f9fe;
+  --glow-1: rgba(59, 130, 246, 0.18);
+  --glow-2: rgba(124, 58, 237, 0.12);
+  --grid: rgba(15, 23, 42, 0.06);
+  --header-bg: rgba(247, 249, 254, 0.68);
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-2: rgba(255, 255, 255, 0.92);
+  --card-edge: linear-gradient(150deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.25) 45%);
+  --spot: rgba(37, 99, 235, 0.09);
+  --ok: #0f9d70;
+  --warn: #b45309;
+  --shadow: 0 26px 60px rgba(15, 23, 42, 0.1);
+  --display: 'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif;
+  --body: Inter, 'Segoe UI', system-ui, sans-serif;
+}
+
+/* The same block twice: once for an explicit dark choice, once for the system preference. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --line: rgba(148, 180, 214, 0.14);
+  --line-strong: rgba(125, 211, 252, 0.34);
+  --accent: #60c5fa;
+  --accent-2: #7c8cff;
+  --text: #f2f6fb;
+  --text-muted: #a9b7c8;
+  --text-faint: rgba(215, 226, 240, 0.58);
+  --canvas: #070e1a;
+  --glow-1: rgba(56, 189, 248, 0.3);
+  --glow-2: rgba(124, 92, 255, 0.26);
+  --grid: rgba(148, 180, 214, 0.085);
+  --header-bg: rgba(7, 14, 26, 0.62);
+  --surface: rgba(255, 255, 255, 0.045);
+  --surface-2: rgba(255, 255, 255, 0.08);
+  --card-edge: linear-gradient(150deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.02) 42%);
+  --spot: rgba(96, 197, 250, 0.16);
+  --ok: #5eead4;
+  --warn: #fcd34d;
+  --shadow: 0 30px 70px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --line: rgba(148, 180, 214, 0.14);
+    --line-strong: rgba(125, 211, 252, 0.34);
+    --accent: #60c5fa;
+    --accent-2: #7c8cff;
+    --text: #f2f6fb;
+    --text-muted: #a9b7c8;
+    --text-faint: rgba(215, 226, 240, 0.58);
+    --canvas: #070e1a;
+    --glow-1: rgba(56, 189, 248, 0.3);
+    --glow-2: rgba(124, 92, 255, 0.26);
+    --grid: rgba(148, 180, 214, 0.085);
+    --header-bg: rgba(7, 14, 26, 0.62);
+    --surface: rgba(255, 255, 255, 0.045);
+    --surface-2: rgba(255, 255, 255, 0.08);
+    --card-edge: linear-gradient(150deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.02) 42%);
+    --spot: rgba(96, 197, 250, 0.16);
+    --ok: #5eead4;
+    --warn: #fcd34d;
+    --shadow: 0 30px 70px rgba(0, 0, 0, 0.5);
+  }
+}
+
+html {
+  background: var(--canvas);
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  /* The canvas colour lives on html: a background here would paint over the negative z-index
+     layers below, which is where the glow and the grid are. */
+  background: transparent;
+  color: var(--text);
+  font-family: var(--body);
+  font-size: 15.5px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+
+body::before {
+  background:
+    radial-gradient(900px 520px at 8% -6%, var(--glow-1), transparent 62%),
+    radial-gradient(760px 460px at 92% 2%, var(--glow-2), transparent 58%);
+}
+
+body::after {
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 68px 68px;
+  mask-image: radial-gradient(1100px 700px at 50% 0%, #000 25%, transparent 78%);
+}
+
+@media (max-width: 760px) {
+  body::after {
+    background-size: 44px 44px;
+  }
+}
+
+.font-display {
+  font-family: var(--display);
+}
+
+.card-edge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--card-edge);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* A spotlight that follows the pointer, painted under the content so it can never eat a click. */
+.spotlight::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(220px circle at var(--mx, 50%) var(--my, 0%), var(--spot), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.spotlight:hover::after,
+.spotlight:focus-visible::after {
+  opacity: 1;
+}
+
+.gradient-text {
+  background: linear-gradient(100deg, var(--accent), var(--accent-2));
+  background-clip: text;
+  color: transparent;
+}
+
+@keyframes ping-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.6;
+  }
+  80%,
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.pulse-ring::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  animation: ping-ring 2.4s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .pulse-ring::after {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

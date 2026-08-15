@@ -89,7 +89,11 @@ const renderCategories = (categories: Record<string, number>): string => {
  * every time; measuring content age here would brand every healthy school stale and make the
  * one signal that matters useless.
  */
-const isStale = (record: SchoolRecord, now: Date, staleAfterMs: number): boolean => {
+export const isStale = (
+  record: SchoolRecord,
+  now: Date,
+  staleAfterMs: number = DEFAULT_STALE_AFTER_MS,
+): boolean => {
   if (record.lastError) return true
   const polled = Date.parse(record.lastPolledAt ?? '')
   return Number.isNaN(polled) || now.getTime() - polled > staleAfterMs

@@ -1,45 +1,154 @@
+import { createReadStream } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
+import { extname, join, normalize, resolve, sep } from 'node:path'
 
 /**
- * Serves the rendered page, and nothing else.
+ * Serves the browser app, its data, and nothing else.
  *
- * One route, one document, rendered on request from what the poller stored -- so the page is
- * never staler than the store, and there is no build step or output file to keep in sync. Bound
- * to localhost by default: this is a private page on a personal machine (see the 1st repo's
- * docs/AGGREGATOR_BRIDGE.md), and a listener that answers the whole network is not something to
- * turn on by accident.
+ * Three responsibilities, in the order a request meets them: the JSON the app reads, the built
+ * assets, and then the document -- either web/dist/index.html or, when no build exists, the
+ * server-rendered page. That fallback is deliberate: a checkout with no `npm run web:build` is
+ * still a working page, so nobody has to keep a build alive on the machine that polls.
+ *
+ * Bound to localhost by default: this is a private page on a personal machine (see the 1st
+ * repo's docs/AGGREGATOR_BRIDGE.md), and a listener that answers the whole network is not
+ * something to turn on by accident.
  */
 export interface ServeOptions {
   port?: number
   host?: string
+  /** The server-rendered fallback document. */
   render: () => Promise<string> | string
+  /** The payload behind GET /api/schools. */
+  api?: () => Promise<unknown> | unknown
+  /** Directory of built assets, if one has been built. */
+  staticDir?: string | null
 }
 
-export const createPageServer = ({ render, host = '127.0.0.1', port = 4180 }: ServeOptions): Server =>
+const CONTENT_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.map': 'application/json; charset=utf-8',
+}
+
+/**
+ * Resolves a URL path inside the asset directory, or null.
+ *
+ * The check is on the resolved path rather than on the request string: `%2e%2e`, backslashes and
+ * doubled separators all survive a textual check and none of them survive this one.
+ */
+const assetPath = (staticDir: string, urlPath: string): string | null => {
+  const root = resolve(staticDir)
+  const candidate = resolve(join(root, normalize(decodeURIComponent(urlPath))))
+  return candidate === root || candidate.startsWith(root + sep) ? candidate : null
+}
+
+const sendFile = async (res: import('node:http').ServerResponse, file: string, head: boolean) => {
+  const info = await stat(file)
+  if (!info.isFile()) throw new Error('not a file')
+
+  // Vite fingerprints asset filenames, so those are safe to cache hard; index.html and anything
+  // else must not be, or a visitor keeps yesterday's app after a deploy.
+  const immutable = /\/assets\//.test(file.replaceAll('\\', '/')) && extname(file) !== '.html'
+  res.writeHead(200, {
+    'content-type': CONTENT_TYPES[extname(file).toLowerCase()] ?? 'application/octet-stream',
+    'content-length': info.size,
+    'cache-control': immutable ? 'public, max-age=31536000, immutable' : 'no-store',
+  })
+  if (head) {
+    res.end()
+    return
+  }
+  createReadStream(file).pipe(res)
+}
+
+export const createPageServer = ({
+  render,
+  api,
+  staticDir = null,
+  host = '127.0.0.1',
+  port = 4180,
+}: ServeOptions): Server =>
   createServer((req, res) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405, { allow: 'GET, HEAD' }).end()
       return
     }
-    const path = (req.url ?? '/').split('?')[0]
-    if (path !== '/' && path !== '/index.html') {
-      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found\n')
+    const head = req.method === 'HEAD'
+    const path = (req.url ?? '/').split('?')[0] ?? '/'
+
+    const fail = (error: unknown) => {
+      res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
+      res.end(
+        `Could not render the page: ${error instanceof Error ? error.message : String(error)}\n`,
+      )
+    }
+
+    if (path === '/api/schools') {
+      if (!api) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found\n')
+        return
+      }
+      void Promise.resolve()
+        .then(api)
+        .then((payload) => {
+          const body = JSON.stringify(payload)
+          res.writeHead(200, {
+            'content-type': 'application/json; charset=utf-8',
+            'content-length': Buffer.byteLength(body),
+            // A view of data that changes under it; a cached copy would show a freshness line
+            // that is itself stale.
+            'cache-control': 'no-store',
+          })
+          res.end(head ? undefined : body)
+        })
+        .catch(fail)
       return
     }
 
-    void Promise.resolve()
-      .then(render)
-      .then((html) => {
-        res.writeHead(200, {
-          'content-type': 'text/html; charset=utf-8',
-          // The page is a view of data that changes under it; a cached copy would show a
-          // freshness line that is itself stale.
-          'cache-control': 'no-store',
+    const document = () =>
+      Promise.resolve()
+        .then(render)
+        .then((html) => {
+          res.writeHead(200, {
+            'content-type': 'text/html; charset=utf-8',
+            'cache-control': 'no-store',
+          })
+          res.end(head ? undefined : html)
         })
-        res.end(req.method === 'HEAD' ? undefined : html)
-      })
-      .catch((error: unknown) => {
-        res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
-        res.end(`Could not render the page: ${error instanceof Error ? error.message : String(error)}\n`)
-      })
+        .catch(fail)
+
+    const isDocument = path === '/' || path === '/index.html'
+    if (!staticDir) {
+      if (!isDocument) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found\n')
+        return
+      }
+      void document()
+      return
+    }
+
+    const file = assetPath(staticDir, isDocument ? '/index.html' : path)
+    if (!file) {
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found\n')
+      return
+    }
+    void sendFile(res, file, head).catch(() => {
+      // A missing built file is only an error for an asset request. For the document it means
+      // there is no build here, which is a supported way to run: render the fallback.
+      if (isDocument) {
+        void document()
+        return
+      }
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found\n')
+    })
   }).listen(port, host)

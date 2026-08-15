@@ -7,7 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  poller:
+    name: poller and page server
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,3 +19,24 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+
+  web:
+    name: browser app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run typecheck
+        working-directory: web
+      - run: npm test
+        working-directory: web
+      # The build is part of CI because a type error in a component would otherwise only surface
+      # on the machine that deploys it.
+      - run: npm run build
+        working-directory: web

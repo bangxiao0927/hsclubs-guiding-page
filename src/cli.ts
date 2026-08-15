@@ -1,6 +1,9 @@
+import { fileURLToPath } from 'node:url'
+
 import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
 import { saveRegistry, withRegistryLock } from './registry.js'
 import { pageSchools } from './pageData.js'
+import { buildPayload } from './pagePayload.js'
 import { pollAllSchools } from './pollAll.js'
 import { pollSchool } from './pollSchool.js'
 import { renderPage } from './renderPage.js'
@@ -50,6 +53,8 @@ const intervalMs = () => positiveNumber('HSCLUBS_POLL_INTERVAL_MS', 60 * 60 * 10
 const pageTitle = () => process.env['HSCLUBS_PAGE_TITLE'] ?? 'HS Clubs'
 const pagePort = () => positiveNumber('HSCLUBS_PORT', 4180)
 const pageHost = () => process.env['HSCLUBS_HOST'] ?? '127.0.0.1'
+/** Where `npm run web:build` puts the browser app. Absent is a supported state, not an error. */
+const webDir = () => process.env['HSCLUBS_WEB_DIR'] ?? fileURLToPath(new URL('../web/dist', import.meta.url))
 const verificationIntervalMs = () =>
   positiveNumber('HSCLUBS_VERIFY_INTERVAL_MS', 30 * 24 * 60 * 60 * 1000)
 
@@ -142,18 +147,24 @@ const watch = async (): Promise<number> => {
 }
 
 const serve = async (): Promise<number> => {
-  // Rendered per request from the store, so the page is never staler than what the poller has
+  // Read per request from the store, so nothing served is ever staler than what the poller has
   // written and there is no output file to keep in sync.
+  const read = async () => {
+    const [entries, store] = await Promise.all([
+      loadRegistry(registryPath()),
+      SchoolStore.open(storePath()),
+    ])
+    return pageSchools(entries, store)
+  }
+
   const server = createPageServer({
     port: pagePort(),
     host: pageHost(),
-    render: async () => {
-      const [entries, store] = await Promise.all([
-        loadRegistry(registryPath()),
-        SchoolStore.open(storePath()),
-      ])
-      return renderPage(pageSchools(entries, store), { title: pageTitle() })
-    },
+    staticDir: webDir(),
+    api: async () => buildPayload(await read(), { title: pageTitle() }),
+    // Used when web/dist has not been built. Keeping it means a fresh checkout serves a working
+    // page with `npm run serve` alone, with no build step on the machine that polls.
+    render: async () => renderPage(await read(), { title: pageTitle() }),
   })
 
   const listening = await new Promise<string | null>((resolve) => {
