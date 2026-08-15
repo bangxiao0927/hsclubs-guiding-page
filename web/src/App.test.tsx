@@ -14,6 +14,7 @@ const payload: PagePayload = {
       slug: 'mvhs',
       siteUrl: 'https://mvhs.example.org',
       host: 'mvhs.example.org',
+      demo: false,
       status: 'live',
       schoolName: 'Mountain View High School',
       address: '3535 Truman Ave',
@@ -34,6 +35,7 @@ const payload: PagePayload = {
       slug: 'demo-high',
       siteUrl: 'https://demo.example.org',
       host: 'demo.example.org',
+      demo: true,
       status: 'stale',
       schoolName: 'Demo High School',
       address: null,
@@ -68,6 +70,7 @@ describe('the directory page', () => {
 
     expect(await screen.findByText('Mountain View High School')).toBeInTheDocument()
     expect(screen.getByText('Demo High School')).toBeInTheDocument()
+    expect(screen.getByText('Demonstration')).toBeInTheDocument()
     // The stale school says so, and says why.
     expect(screen.getByText(/answered 503/)).toBeInTheDocument()
   })

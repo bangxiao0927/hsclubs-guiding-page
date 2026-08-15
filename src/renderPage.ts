@@ -99,7 +99,11 @@ export const isStale = (
   return Number.isNaN(polled) || now.getTime() - polled > staleAfterMs
 }
 
-const renderSchool = ({ record, siteUrl }: PageSchool, now: Date, staleAfterMs: number): string => {
+const renderSchool = (
+  { record, siteUrl, demo }: PageSchool,
+  now: Date,
+  staleAfterMs: number,
+): string => {
   const href = escapeHtml(siteUrl)
   const host = escapeHtml(hostOf(siteUrl))
   const summary = record.summary
@@ -110,7 +114,7 @@ const renderSchool = ({ record, siteUrl }: PageSchool, now: Date, staleAfterMs: 
     // Listed but never successfully read: say so rather than silently omitting the school, or
     // nobody will ever notice a school that has been broken since the day it was added.
     return `<a class="school unavailable" href="${href}" rel="noopener noreferrer" data-reveal data-spot>
-      <span class="school-top"><span class="host">${host}</span><span class="badge warn">No data</span></span>
+      <span class="school-top"><span class="host">${host}${demo ? ' &middot; Demo' : ''}</span><span class="badge warn">No data</span></span>
       <h3>${escapeHtml(record.slug)}</h3>
       <p class="note">No data yet. ${escapeHtml(record.lastError ?? 'Never polled.')}</p>
       <span class="school-foot"><span class="visit">Open site <span class="chev" aria-hidden="true">&rarr;</span></span></span>
@@ -125,7 +129,7 @@ const renderSchool = ({ record, siteUrl }: PageSchool, now: Date, staleAfterMs: 
   return `<a class="school${
     stale ? ' stale' : ''
   }" href="${href}" rel="noopener noreferrer" data-reveal data-spot>
-      <span class="school-top"><span class="host">${host}</span><span class="badge${
+      <span class="school-top"><span class="host">${host}${demo ? ' &middot; Demo' : ''}</span><span class="badge${
         stale ? ' warn' : ' ok'
       }">${stale ? 'Stale' : 'Live'}</span></span>
       <h3>${escapeHtml(summary.schoolName)}</h3>

@@ -21,6 +21,14 @@ export interface SchoolEntry {
     state: VerificationState
   }
   listed: boolean
+  /**
+   * A fixture used to exercise the multi-school UI, not a participating school.
+   *
+   * Verification proves control of an origin; it does not prove that a made-up name belongs to
+   * a real school. Keeping that distinction in the registry prevents a technically verified
+   * fixture from being presented as institutionally approved.
+   */
+  demo?: boolean
 }
 
 export class RegistryError extends Error {}
@@ -68,6 +76,7 @@ const parseEntry = (raw: unknown, index: number): SchoolEntry => {
   const lastCheckedAt = verification['lastCheckedAt']
   const lastError = verification['lastError']
   const listed = raw['listed']
+  const demo = raw['demo']
 
   return {
     slug,
@@ -82,6 +91,7 @@ const parseEntry = (raw: unknown, index: number): SchoolEntry => {
     // Absent means listed: a school is added to be shown, and forgetting the flag should not
     // silently hide it.
     listed: listed === undefined ? true : listed === true,
+    demo: demo === true,
   }
 }
 

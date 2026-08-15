@@ -7,6 +7,7 @@ const school = (overrides: Partial<School> = {}): School => ({
   slug: 'mvhs',
   siteUrl: 'https://mvhs.example.org',
   host: 'mvhs.example.org',
+  demo: false,
   status: 'live',
   schoolName: 'Mountain View High School',
   address: null,

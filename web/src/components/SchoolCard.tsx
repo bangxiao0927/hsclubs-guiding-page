@@ -3,7 +3,7 @@ import type { PointerEvent } from 'react'
 import { displayName } from '../filters'
 import type { School } from '../types'
 import { Sparkline } from './Sparkline'
-import { StatusBadge } from './StatusBadge'
+import { DemoBadge, StatusBadge } from './StatusBadge'
 
 const MAX_CATEGORIES = 6
 
@@ -36,7 +36,10 @@ export const SchoolCard = ({ school, onOpen }: { school: School; onOpen: (school
     >
       <span className="flex items-center justify-between gap-3">
         <span className="text-[0.82rem] text-[var(--text-faint)]">{school.host}</span>
-        <StatusBadge status={school.status} />
+        <span className="flex items-center gap-2">
+          {school.demo && <DemoBadge />}
+          <StatusBadge status={school.status} />
+        </span>
       </span>
       <h3 className="font-display m-0 text-[1.35rem] font-bold tracking-[-0.025em] transition-colors group-hover:text-[var(--accent)]">
         {displayName(school)}

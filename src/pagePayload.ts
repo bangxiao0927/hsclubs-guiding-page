@@ -15,6 +15,7 @@ export interface SchoolPayload {
   slug: string
   siteUrl: string
   host: string
+  demo: boolean
   status: SchoolStatus
   schoolName: string | null
   address: string | null
@@ -66,13 +67,14 @@ export const buildPayload = (
   schools: PageSchool[],
   { title = 'HS Clubs', now = new Date(), staleAfterMs }: PayloadOptions = {},
 ): PagePayload => {
-  const list = schools.map(({ record, siteUrl }): SchoolPayload => {
+  const list = schools.map(({ record, siteUrl, demo }): SchoolPayload => {
     const summary = record.summary
     const stale = isStale(record, now, staleAfterMs)
     return {
       slug: record.slug,
       siteUrl,
       host: hostOf(siteUrl),
+      demo: demo === true,
       status: !summary ? 'no-data' : stale ? 'stale' : 'live',
       schoolName: summary?.schoolName ?? null,
       address: summary?.address ?? null,

@@ -10,6 +10,8 @@ export interface School {
   slug: string
   siteUrl: string
   host: string
+  /** A fixture for exercising this UI, not an approved participating school. */
+  demo: boolean
   status: SchoolStatus
   schoolName: string | null
   address: string | null

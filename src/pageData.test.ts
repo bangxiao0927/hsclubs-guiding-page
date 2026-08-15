@@ -40,7 +40,7 @@ describe('pageSchools', () => {
   // rather than silently omitting it from the only page that can explain what happened.
   it('returns an empty record for a newly verified school the store has never seen', () => {
     expect(pageSchools([school('newschool', 'verified')], fakeStore({}))).toEqual([
-      { record: emptyRecord('newschool'), siteUrl: 'https://newschool.example.org' },
+      { record: emptyRecord('newschool'), siteUrl: 'https://newschool.example.org', demo: false },
     ])
   })
 
@@ -49,5 +49,11 @@ describe('pageSchools', () => {
     expect(pageSchools([school('mvhs', 'verified')], fakeStore({}))[0]?.siteUrl).toBe(
       'https://mvhs.example.org',
     )
+  })
+
+  it('carries the registry demo marker to the page', () => {
+    expect(
+      pageSchools([{ ...school('fixture', 'verified'), demo: true }], fakeStore({}))[0]?.demo,
+    ).toBe(true)
   })
 })

@@ -36,6 +36,12 @@ describe('parseRegistry', () => {
     expect(parsed?.listed).toBe(true)
   })
 
+  it('only marks an entry as a demo when the operator explicitly says true', () => {
+    expect(parseRegistry({ schools: [entry({ demo: true })] })[0]?.demo).toBe(true)
+    expect(parseRegistry({ schools: [entry()] })[0]?.demo).toBe(false)
+    expect(parseRegistry({ schools: [entry({ demo: 'yes' })] })[0]?.demo).toBe(false)
+  })
+
   // Caught in configuration rather than on the wire: a mistake that only surfaces during a
   // fetch is a mistake that ships.
   it('rejects a non-https summary url', () => {
