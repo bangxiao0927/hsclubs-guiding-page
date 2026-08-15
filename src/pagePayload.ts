@@ -16,6 +16,8 @@ export interface SchoolPayload {
   siteUrl: string
   host: string
   demo: boolean
+  /** Operator-confirmed coordinates, or null when none have been recorded. */
+  location: { lat: number; lon: number } | null
   status: SchoolStatus
   schoolName: string | null
   address: string | null
@@ -67,7 +69,7 @@ export const buildPayload = (
   schools: PageSchool[],
   { title = 'HS Clubs', now = new Date(), staleAfterMs }: PayloadOptions = {},
 ): PagePayload => {
-  const list = schools.map(({ record, siteUrl, demo }): SchoolPayload => {
+  const list = schools.map(({ record, siteUrl, demo, location }): SchoolPayload => {
     const summary = record.summary
     const stale = isStale(record, now, staleAfterMs)
     return {
@@ -75,6 +77,7 @@ export const buildPayload = (
       siteUrl,
       host: hostOf(siteUrl),
       demo: demo === true,
+      location: location ?? null,
       status: !summary ? 'no-data' : stale ? 'stale' : 'live',
       schoolName: summary?.schoolName ?? null,
       address: summary?.address ?? null,

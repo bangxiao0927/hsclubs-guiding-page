@@ -12,6 +12,8 @@ export interface School {
   host: string
   /** A fixture for exercising this UI, not an approved participating school. */
   demo: boolean
+  /** Operator-confirmed coordinates, or null when none have been recorded. */
+  location: { lat: number; lon: number } | null
   status: SchoolStatus
   schoolName: string | null
   address: string | null

@@ -9,7 +9,7 @@ const demo: School = {
   slug: 'demo',
   siteUrl: 'https://demo.example.org',
   host: 'demo.example.org',
-  demo: true,
+  demo: true,  location: null,
   status: 'live',
   schoolName: 'Demo',
   address: null,

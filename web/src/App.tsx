@@ -6,6 +6,7 @@ import { Hero } from './components/Hero'
 import { MobileDock } from './components/MobileDock'
 import { SchoolCard } from './components/SchoolCard'
 import { SchoolDrawer } from './components/SchoolDrawer'
+import { SchoolMap } from './components/SchoolMap'
 import { SchoolSwitcher } from './components/SchoolSwitcher'
 import { filterByCategories, searchSchools, sortSchools, type SortKey } from './filters'
 import type { PagePayload, School } from './types'
@@ -129,6 +130,11 @@ export const App = () => {
       />
       <main id="top" className="pb-24 sm:pb-0">
         <Hero totals={totals} schools={schools} />
+        {schools.length > 0 && (
+          <section className="mx-auto w-full max-w-[1200px] px-[clamp(1.15rem,4vw,3.5rem)] pb-[clamp(1.5rem,4vh,3rem)]">
+            <SchoolMap schools={schools} />
+          </section>
+        )}
         <section
           id="directories"
           aria-labelledby="directories-title"

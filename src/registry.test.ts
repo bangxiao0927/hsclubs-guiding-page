@@ -42,6 +42,23 @@ describe('parseRegistry', () => {
     expect(parseRegistry({ schools: [entry({ demo: 'yes' })] })[0]?.demo).toBe(false)
   })
 
+  // A guessed pin on a real institution is worse than an honest gap on the map.
+  it('accepts confirmed coordinates and rejects malformed ones', () => {
+    expect(parseRegistry({ schools: [entry({ location: { lat: 37.4, lon: -122.1 } })] })[0]?.location)
+      .toEqual({ lat: 37.4, lon: -122.1 })
+    expect(parseRegistry({ schools: [entry()] })[0]?.location).toBeUndefined()
+
+    for (const location of [
+      { lat: 91, lon: 0 },
+      { lat: 0, lon: 181 },
+      { lat: '37.4', lon: -122.1 },
+      { lat: 37.4 },
+      'somewhere',
+    ]) {
+      expect(() => parseRegistry({ schools: [entry({ location })] })).toThrow(RegistryError)
+    }
+  })
+
   // Caught in configuration rather than on the wire: a mistake that only surfaces during a
   // fetch is a mistake that ships.
   it('rejects a non-https summary url', () => {
