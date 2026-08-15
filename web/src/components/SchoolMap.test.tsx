@@ -27,7 +27,7 @@ const school = (slug: string, name: string, location: School['location']): Schoo
   trend: null,
 })
 
-const viewBox = () => screen.getByRole('img').getAttribute('viewBox')
+const landPath = () => screen.getByTestId('globe-land').getAttribute('d')
 
 describe('SchoolMap', () => {
   it('plots only schools with confirmed coordinates and counts the rest', () => {
@@ -43,7 +43,7 @@ describe('SchoolMap', () => {
     expect(screen.getByRole('button', { name: 'Alpha High' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Beta High' })).not.toBeInTheDocument()
     // A school without coordinates is reported, never pinned to a guess.
-    expect(screen.getByText('1 school without a confirmed location')).toBeInTheDocument()
+    expect(screen.getByText('1 school awaiting a confirmed location')).toBeInTheDocument()
   })
 
   it('zooms to a school when its pin is chosen and restores the overview', async () => {
@@ -57,14 +57,14 @@ describe('SchoolMap', () => {
       />,
     )
 
-    const world = viewBox()
+    const world = landPath()
     await user.click(screen.getByRole('button', { name: 'Beta High' }))
     expect(screen.getByRole('button', { name: 'Beta High' })).toHaveAttribute('aria-pressed', 'true')
-    // The pan/zoom is animated, so the viewport arrives over the next frames.
-    await waitFor(() => expect(viewBox()).not.toBe(world))
+    // The globe rotation is animated, so the projected land arrives over the next frames.
+    await waitFor(() => expect(landPath()).not.toBe(world))
 
-    await user.click(screen.getByRole('button', { name: 'Reset view' }))
-    expect(screen.getByText('2 mapped schools')).toBeInTheDocument()
-    await waitFor(() => expect(viewBox()).toBe(world))
+    await user.click(screen.getByRole('button', { name: 'Show all' }))
+    expect(screen.getByText('Find a school directory')).toBeInTheDocument()
+    await waitFor(() => expect(landPath()).toBe(world))
   })
 })
