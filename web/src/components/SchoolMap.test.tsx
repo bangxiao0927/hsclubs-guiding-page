@@ -100,6 +100,29 @@ describe('SchoolMap', () => {
     expect(screen.getByRole('button', { name: 'Alpha High' })).toBeInTheDocument()
   })
 
+  // Releasing a hand-drag used to snap the camera back to the mean of the schools. With schools
+  // on opposite sides of the planet that mean is the empty hemisphere between them, so the globe
+  // "locked to Europe" after a drag. A free rotation must stay where it is left.
+  it('does not snap back to an overview after the arrow keys rotate it', () => {
+    render(
+      <SchoolMap
+        schools={[
+          school('a', 'Alpha High', { lat: 37.4, lon: -122.1 }),
+          school('b', 'Beta High', { lat: 35.7, lon: 139.7 }),
+        ]}
+      />,
+    )
+    const globe = screen.getByRole('application')
+    fireEvent.keyDown(globe, { key: 'ArrowRight' })
+    const settled = landPath()
+
+    // A frame later there is no active school and no tour target to animate toward.
+    return waitFor(() => {
+      expect(landPath()).toBe(settled)
+      expect(screen.getByRole('heading').textContent).toBe('Find a school directory')
+    })
+  })
+
   it('moves focus between schools as a tour until someone interacts', async () => {
     vi.useFakeTimers()
     render(
