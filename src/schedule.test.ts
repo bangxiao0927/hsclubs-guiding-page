@@ -28,6 +28,33 @@ describe('runOnInterval', () => {
     expect(sleeps).toEqual([60_000, 60_000])
   })
 
+  // setTimeout wraps past ~24.8 days, so the 30-day verify interval must be slept in hops that
+  // each stay under the 32-bit ceiling -- otherwise the "monthly" re-check fires immediately and
+  // loops.
+  it('splits an interval beyond setTimeout\'s 32-bit ceiling into safe hops', async () => {
+    const controller = new AbortController()
+    let runs = 0
+    const sleeps: number[] = []
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000
+
+    await runOnInterval(
+      async () => {
+        runs += 1
+        if (runs === 2) controller.abort()
+      },
+      {
+        intervalMs: thirtyDays,
+        signal: controller.signal,
+        sleep: async (ms) => {
+          sleeps.push(ms)
+        },
+      },
+    )
+
+    expect(sleeps.every((ms) => ms <= 2_147_483_647)).toBe(true)
+    expect(sleeps.reduce((total, ms) => total + ms, 0)).toBe(thirtyDays)
+  })
+
   it('does not run at all if the signal is already aborted', async () => {
     const controller = new AbortController()
     controller.abort()

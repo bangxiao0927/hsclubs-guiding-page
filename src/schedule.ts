@@ -15,6 +15,14 @@ export interface ScheduleOptions {
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>
 }
 
+/**
+ * setTimeout stores its delay in a 32-bit signed integer, so anything past ~24.8 days silently
+ * wraps and fires almost immediately. The verify interval defaults to 30 days, which lands
+ * squarely in that trap and would turn a monthly re-check into a hot loop hammering every
+ * school. Sleeping in bounded hops keeps any interval honest.
+ */
+const MAX_TIMEOUT_MS = 2_147_483_647
+
 const defaultSleep = (ms: number, signal?: AbortSignal): Promise<void> =>
   new Promise((resolve) => {
     if (signal?.aborted) {
@@ -25,10 +33,13 @@ const defaultSleep = (ms: number, signal?: AbortSignal): Promise<void> =>
       clearTimeout(timer)
       resolve()
     }
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort)
-      resolve()
-    }, ms)
+    const timer = setTimeout(
+      () => {
+        signal?.removeEventListener('abort', onAbort)
+        resolve()
+      },
+      Math.min(ms, MAX_TIMEOUT_MS),
+    )
     signal?.addEventListener('abort', onAbort, { once: true })
   })
 
@@ -43,6 +54,13 @@ export const runOnInterval = async (
       onError?.(error)
     }
     if (signal?.aborted) return
-    await sleep(intervalMs, signal)
+    // Long intervals are slept in <=24-day hops: a single setTimeout past its 32-bit ceiling
+    // wraps to near-zero and would run the task in a tight loop.
+    let remaining = intervalMs
+    while (remaining > 0 && !signal?.aborted) {
+      const hop = Math.min(remaining, MAX_TIMEOUT_MS)
+      await sleep(hop, signal)
+      remaining -= hop
+    }
   }
 }
