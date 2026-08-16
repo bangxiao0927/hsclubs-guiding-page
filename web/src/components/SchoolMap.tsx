@@ -110,6 +110,9 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
   const [paused, setPaused] = useState(false)
   const [cycle, setCycle] = useState(0)
   const [dragging, setDragging] = useState(false)
+  // Free mode: the human has rotated the globe by hand, so there is no fly-to target and the
+  // camera stays exactly where they left it. Only choosing a school or resuming the tour ends it.
+  const [free, setFree] = useState(false)
   const drag = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null)
   const spin = useRef<{ lon: number; lat: number }>({ lon: 0, lat: 0 })
   const inertia = useRef(0)
@@ -137,7 +140,10 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
   const target: Camera = active?.location
     ? { lon: active.location.lon, lat: active.location.lat, zoom: 1.55 }
     : overview
-  const { camera, current, set } = useCamera(target, dragging)
+  // While dragging or free, the tween is suspended entirely: without this, releasing a drag
+  // snapped the camera back to the mean of the schools -- which for schools on opposite sides
+  // of the planet is the empty hemisphere between them.
+  const { camera, current, set } = useCamera(target, dragging || free)
 
   /**
    * Dragging rotates the sphere directly.
@@ -186,6 +192,7 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
     // stops dead or never stops, and both read as a bug.
     if (state.moved) {
       setFocus(null)
+      setFree(true)
       let velocity = spin.current
       const glide = () => {
         velocity = { lon: velocity.lon * 0.94, lat: velocity.lat * 0.94 }
@@ -215,6 +222,7 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
     event.preventDefault()
     setPaused(true)
     setFocus(null)
+    setFree(true)
     set({ ...current.current, lon: current.current.lon + move[0], lat: current.current.lat + move[1] })
   }
 
@@ -391,6 +399,7 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
               onClick={() => {
                 setFocus(school.slug)
                 setPaused(true)
+                setFree(false)
               }}
               aria-pressed={selected}
               style={{ left: `${(point[0] / WIDTH) * 100}%`, top: `${(point[1] / HEIGHT) * 100}%` }}
@@ -425,12 +434,13 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
               {missing} school{missing === 1 ? '' : 's'} awaiting a confirmed location
             </span>
           )}
-          {active && (
+          {(active || paused) && located.length > 0 && (
             <button
               type="button"
               onClick={() => {
                 setFocus(first?.slug ?? null)
                 setPaused(false)
+                setFree(false)
                 setCycle((value) => value + 1)
               }}
               className="cursor-pointer rounded-full border border-[var(--line)] bg-[var(--header-bg)] px-3 py-1.5 text-xs font-semibold backdrop-blur-xl transition hover:border-[var(--line-strong)]"
