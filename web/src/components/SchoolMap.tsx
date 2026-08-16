@@ -134,7 +134,13 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
     }, 3000)
   }
 
-  useEffect(() => () => window.clearTimeout(idle.current), [])
+  useEffect(
+    () => () => {
+      window.clearTimeout(idle.current)
+      cancelAnimationFrame(inertia.current)
+    },
+    [],
+  )
 
   useEffect(() => {
     if (focus && !located.some((school) => school.slug === focus)) setFocus(null)
@@ -172,6 +178,9 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
   const onPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0 && event.pointerType === 'mouse') return
     cancelAnimationFrame(inertia.current)
+    // A previous gesture may have ended without a click (cancel, drag released outside the
+    // window). Clear it now or that stale marker would eat the next tap on a school pin.
+    swallowClick.current = false
     window.clearTimeout(idle.current)
     drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false }
     spin.current = { lon: 0, lat: 0 }

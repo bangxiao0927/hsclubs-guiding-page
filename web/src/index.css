@@ -222,6 +222,11 @@ body::after {
   from {
     opacity: 0;
     transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @keyframes map-cycle {
@@ -230,10 +235,5 @@ body::after {
   }
   to {
     transform: scaleX(1);
-  }
-}
-  to {
-    opacity: 1;
-    transform: none;
   }
 }
