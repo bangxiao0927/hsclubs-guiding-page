@@ -118,6 +118,23 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
   const inertia = useRef(0)
   const swallowClick = useRef(false)
   const active = located.find((school) => school.slug === focus) ?? null
+  const idle = useRef(0)
+
+  // After a few seconds of no input the globe returns to its tour on its own, so a page left
+  // open keeps moving rather than freezing wherever it was last nudged. Every interaction
+  // restarts this countdown; leaving for a school never schedules one.
+  const resumeTour = () => {
+    window.clearTimeout(idle.current)
+    if (located.length < 2) return
+    idle.current = window.setTimeout(() => {
+      setFree(false)
+      setFocus(first?.slug ?? null)
+      setPaused(false)
+      setCycle((value) => value + 1)
+    }, 3000)
+  }
+
+  useEffect(() => () => window.clearTimeout(idle.current), [])
 
   useEffect(() => {
     if (focus && !located.some((school) => school.slug === focus)) setFocus(null)
@@ -155,6 +172,7 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
   const onPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0 && event.pointerType === 'mouse') return
     cancelAnimationFrame(inertia.current)
+    window.clearTimeout(idle.current)
     drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false }
     spin.current = { lon: 0, lat: 0 }
     setPaused(true)
@@ -206,6 +224,8 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
       }
       inertia.current = requestAnimationFrame(glide)
     }
+    // Whether or not it moved, the globe returns to its tour a few seconds after release.
+    resumeTour()
   }
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -224,6 +244,7 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
     setFocus(null)
     setFree(true)
     set({ ...current.current, lon: current.current.lon + move[0], lat: current.current.lat + move[1] })
+    resumeTour()
   }
 
   const projection = useMemo(
@@ -393,24 +414,22 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
           if (!point || !visible) return null
           const selected = school.slug === active?.slug
           return (
-            <button
+            <a
               key={school.slug}
-              type="button"
-              onClick={() => {
-                setFocus(school.slug)
-                setPaused(true)
-                setFree(false)
-              }}
-              aria-pressed={selected}
+              href={school.siteUrl}
+              rel="noopener noreferrer"
+              aria-current={selected ? 'true' : undefined}
+              aria-label={`Open ${displayName(school)} at ${school.host}`}
               style={{ left: `${(point[0] / WIDTH) * 100}%`, top: `${(point[1] / HEIGHT) * 100}%` }}
-              className={`pointer-events-auto absolute z-10 max-w-[48vw] -translate-x-1/2 translate-y-4 cursor-pointer truncate rounded-xl border px-3 py-1.5 text-[0.75rem] font-bold shadow-xl backdrop-blur-md transition duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
+              className={`pointer-events-auto absolute z-10 flex max-w-[48vw] -translate-x-1/2 translate-y-4 cursor-pointer items-center gap-1.5 truncate rounded-xl border px-3 py-1.5 text-[0.75rem] font-bold no-underline shadow-xl backdrop-blur-md transition duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] ${
                 selected
                   ? 'scale-105 border-[var(--line-strong)] bg-[var(--surface-2)] text-[var(--accent)]'
                   : 'border-[var(--line)] bg-[var(--surface)] hover:scale-105 hover:border-[var(--line-strong)]'
               }`}
             >
-              {displayName(school)}
-            </button>
+              <span className="truncate">{displayName(school)}</span>
+              <span aria-hidden className="opacity-60">&#8599;</span>
+            </a>
           )
         })}
       </div>
@@ -425,7 +444,7 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
           </div>
         ) : (
           <p className="m-0 rounded-full border border-[var(--line)] bg-[var(--header-bg)] px-3 py-1.5 text-xs text-[var(--text-muted)] backdrop-blur-xl">
-            Drag the globe to explore &middot; select a school to fly there
+            Drag to explore &middot; tap a school to open its site
           </p>
         )}
         <div className="flex items-center gap-2">
