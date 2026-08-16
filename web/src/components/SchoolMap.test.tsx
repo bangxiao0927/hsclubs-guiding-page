@@ -70,39 +70,34 @@ describe('SchoolMap', () => {
     await waitFor(() => expect(landPath()).toBe(world))
   })
 
-  it('rotates when dragged and hands control back to the person dragging', async () => {
-    render(
-      <SchoolMap
-        schools={[
-          school('a', 'Alpha High', { lat: 37.4, lon: -122.1 }),
-          school('b', 'Beta High', { lat: 35.7, lon: 139.7 }),
-        ]}
-      />,
-    )
+  // Touch and mouse dragging needs Pointer Event coordinates, which jsdom does not provide, so
+  // the gesture itself is verified against a real browser. What is asserted here is the rule
+  // that made it feel wrong before: rotating right must carry the surface right.
+  it('rotates the surface with the input, not against it', () => {
+    render(<SchoolMap schools={[school('a', 'Alpha High', { lat: 0, lon: 0 })]} />)
     const globe = screen.getByRole('application')
-    globe.setPointerCapture = () => {}
-    const before = landPath()
-
-    fireEvent.pointerDown(globe, { pointerId: 1, clientX: 400, clientY: 300, button: 0 })
-    fireEvent.pointerMove(globe, { pointerId: 1, clientX: 520, clientY: 330 })
-
-    // The drag itself moves the camera; it does not wait for a tween to catch up.
-    expect(landPath()).not.toBe(before)
-
-    // Taking hold of the globe also takes over from the tour, so the camera cannot be yanked
-    // away mid-gesture. (Release behaviour -- inertia and clearing the focus -- needs full
-    // Pointer Event semantics and is covered against a real browser instead of jsdom.)
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Resume tour' })).toBeInTheDocument())
-  })
-
-  it('rotates with the arrow keys for anyone not using a pointer', () => {
-    render(<SchoolMap schools={[school('a', 'Alpha High', { lat: 37.4, lon: -122.1 })]} />)
-    const globe = screen.getByRole('application')
-    const before = landPath()
+    const left = () =>
+      Number.parseFloat(screen.getByRole('button', { name: 'Alpha High' }).style.left)
+    const before = left()
 
     fireEvent.keyDown(globe, { key: 'ArrowRight' })
 
-    expect(landPath()).not.toBe(before)
+    expect(left()).toBeGreaterThan(before)
+  })
+
+  // One unusable value would project every coordinate to NaN and blank the entire globe.
+  it('refuses a camera it cannot draw', () => {
+    render(<SchoolMap schools={[school('a', 'Alpha High', { lat: 0, lon: 0 })]} />)
+    const globe = screen.getByRole('region', { name: 'School map' })
+    const before = landPath()
+
+    // jsdom pointer events arrive without coordinates, so the deltas are not numbers.
+    fireEvent.pointerDown(globe, { pointerId: 1, button: 0 })
+    fireEvent.pointerMove(globe, { pointerId: 1 })
+
+    expect(landPath()).toBe(before)
+    expect(landPath()).not.toContain('NaN')
+    expect(screen.getByRole('button', { name: 'Alpha High' })).toBeInTheDocument()
   })
 
   it('moves focus between schools as a tour until someone interacts', async () => {
