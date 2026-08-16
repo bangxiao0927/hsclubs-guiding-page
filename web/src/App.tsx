@@ -132,18 +132,9 @@ export const App = () => {
         {schools.length > 0 ? <SchoolMap schools={schools} /> : <Hero totals={totals} schools={schools} />}
         <section
           id="directories"
-          aria-labelledby="directories-title"
+          aria-label="Directories"
           className="mx-auto w-full max-w-[1200px] scroll-mt-[70px] px-[clamp(1.15rem,4vw,3.5rem)] pb-[clamp(3rem,8vh,5.5rem)] pt-[clamp(1.5rem,4vh,3rem)]"
         >
-          <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-b border-[var(--line)] pb-5">
-            <h2 id="directories-title" className="font-display m-0 text-[1.45rem] font-bold tracking-[-0.025em]">
-              Directories
-            </h2>
-            <p className="m-0 text-[0.9rem] text-[var(--text-faint)]">
-              Verified schools only &middot; checked {totals.checkedAge}
-            </p>
-          </div>
-
           {state.status === 'loading' && <Skeleton />}
 
           {state.status === 'failed' && (
