@@ -1,5 +1,4 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { School } from '../types'
@@ -28,6 +27,7 @@ const school = (slug: string, name: string, location: School['location']): Schoo
 })
 
 const landPath = () => screen.getByTestId('globe-land').getAttribute('d')
+const pin = (name: string | RegExp) => screen.getByRole('link', { name })
 
 describe('SchoolMap', () => {
   afterEach(() => vi.useRealTimers())
@@ -42,42 +42,27 @@ describe('SchoolMap', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'Alpha High' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Beta High' })).not.toBeInTheDocument()
+    expect(pin(/Alpha High/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Beta High/ })).not.toBeInTheDocument()
     // A school without coordinates is reported, never pinned to a guess.
     expect(screen.getByText('1 school awaiting a confirmed location')).toBeInTheDocument()
   })
 
-  it('zooms to a school when its pin is chosen and restores the overview', async () => {
-    const user = userEvent.setup()
-    render(
-      <SchoolMap
-        schools={[
-          school('a', 'Alpha High', { lat: 37.4, lon: -122.1 }),
-          school('b', 'Beta High', { lat: 51.5, lon: -0.1 }),
-        ]}
-      />,
-    )
+  // The guide's job is to hand off: a pin goes straight to the school's own origin.
+  it('links each pin to the school site rather than trapping the visitor', () => {
+    render(<SchoolMap schools={[school('a', 'Alpha High', { lat: 37.4, lon: -122.1 })]} />)
 
-    const world = landPath()
-    await user.click(screen.getByRole('button', { name: 'Beta High' }))
-    expect(screen.getByRole('button', { name: 'Beta High' })).toHaveAttribute('aria-pressed', 'true')
-    // The globe rotation is animated, so the projected land arrives over the next frames.
-    await waitFor(() => expect(landPath()).not.toBe(world))
-
-    await user.click(screen.getByRole('button', { name: 'Resume tour' }))
-    expect(screen.getByRole('heading', { name: 'Alpha High' })).toBeInTheDocument()
-    await waitFor(() => expect(landPath()).toBe(world))
+    const link = pin(/Alpha High/)
+    expect(link).toHaveAttribute('href', 'https://a.example.org')
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
   })
 
-  // Touch and mouse dragging needs Pointer Event coordinates, which jsdom does not provide, so
-  // the gesture itself is verified against a real browser. What is asserted here is the rule
-  // that made it feel wrong before: rotating right must carry the surface right.
+  // Rotating right must carry the surface right; jsdom lacks pointer coordinates, so the honest
+  // check is that the arrow keys move a pin the same way.
   it('rotates the surface with the input, not against it', () => {
     render(<SchoolMap schools={[school('a', 'Alpha High', { lat: 0, lon: 0 })]} />)
     const globe = screen.getByRole('application')
-    const left = () =>
-      Number.parseFloat(screen.getByRole('button', { name: 'Alpha High' }).style.left)
+    const left = () => Number.parseFloat(pin(/Alpha High/).style.left)
     const before = left()
 
     fireEvent.keyDown(globe, { key: 'ArrowRight' })
@@ -91,19 +76,17 @@ describe('SchoolMap', () => {
     const globe = screen.getByRole('region', { name: 'School map' })
     const before = landPath()
 
-    // jsdom pointer events arrive without coordinates, so the deltas are not numbers.
     fireEvent.pointerDown(globe, { pointerId: 1, button: 0 })
     fireEvent.pointerMove(globe, { pointerId: 1 })
 
     expect(landPath()).toBe(before)
     expect(landPath()).not.toContain('NaN')
-    expect(screen.getByRole('button', { name: 'Alpha High' })).toBeInTheDocument()
+    expect(pin(/Alpha High/)).toBeInTheDocument()
   })
 
-  // Releasing a hand-drag used to snap the camera back to the mean of the schools. With schools
-  // on opposite sides of the planet that mean is the empty hemisphere between them, so the globe
-  // "locked to Europe" after a drag. A free rotation must stay where it is left.
-  it('does not snap back to an overview after the arrow keys rotate it', () => {
+  // Releasing a hand-drag used to snap back to the mean of the schools -- the empty hemisphere
+  // between California and Tokyo. A free rotation must stay where it is left.
+  it('does not snap back to an overview after the arrow keys rotate it', async () => {
     render(
       <SchoolMap
         schools={[
@@ -116,14 +99,13 @@ describe('SchoolMap', () => {
     fireEvent.keyDown(globe, { key: 'ArrowRight' })
     const settled = landPath()
 
-    // A frame later there is no active school and no tour target to animate toward.
-    return waitFor(() => {
+    await waitFor(() => {
       expect(landPath()).toBe(settled)
       expect(screen.getByRole('heading').textContent).toBe('Find a school directory')
     })
   })
 
-  it('moves focus between schools as a tour until someone interacts', async () => {
+  it('tours between schools until someone interacts', async () => {
     vi.useFakeTimers()
     render(
       <SchoolMap
@@ -134,14 +116,30 @@ describe('SchoolMap', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'Alpha High' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(pin(/Alpha High/)).toHaveAttribute('aria-current', 'true')
     await vi.advanceTimersByTimeAsync(5_200)
-    expect(screen.getByRole('button', { name: 'Beta High' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
+    expect(pin(/Beta High/)).toHaveAttribute('aria-current', 'true')
+  })
+
+  // A page left open should keep moving: a rotation hands back to the tour a few seconds later.
+  it('resumes the tour a few seconds after the last interaction', async () => {
+    vi.useFakeTimers()
+    render(
+      <SchoolMap
+        schools={[
+          school('a', 'Alpha High', { lat: 37.4, lon: -122.1 }),
+          school('b', 'Beta High', { lat: 35.7, lon: 139.7 }),
+        ]}
+      />,
     )
+    const globe = screen.getByRole('application')
+
+    // Rotate by hand: no school is active and the tour is paused.
+    fireEvent.keyDown(globe, { key: 'ArrowRight' })
+    expect(screen.getByRole('heading').textContent).toBe('Find a school directory')
+
+    // Idle for three seconds and the tour takes back over.
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(screen.getByRole('heading').textContent).toBe('Alpha High')
   })
 })
