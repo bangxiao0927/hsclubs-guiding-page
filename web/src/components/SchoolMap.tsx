@@ -52,6 +52,11 @@ const useCamera = (target: Camera, hold: boolean) => {
   const frame = useRef(0)
 
   const set = (next: Camera) => {
+    // A single non-finite value would project every coordinate to NaN and blank the globe, so
+    // an unusable camera is refused rather than rendered.
+    if (!Number.isFinite(next.lon) || !Number.isFinite(next.lat) || !Number.isFinite(next.zoom)) {
+      return
+    }
     const safe = { ...next, lat: clampLat(next.lat), lon: wrapLon(next.lon) }
     current.current = safe
     setCamera(safe)
@@ -108,6 +113,7 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
   const drag = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null)
   const spin = useRef<{ lon: number; lat: number }>({ lon: 0, lat: 0 })
   const inertia = useRef(0)
+  const swallowClick = useRef(false)
   const active = located.find((school) => school.slug === focus) ?? null
 
   useEffect(() => {
@@ -140,34 +146,42 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
    * pointer, and Pointer Events cover mouse, touch and pen with one path -- a separate touch
    * implementation is how one of the two silently rots.
    */
-  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const onPointerDown = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0 && event.pointerType === 'mouse') return
     cancelAnimationFrame(inertia.current)
     drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false }
     spin.current = { lon: 0, lat: 0 }
     setPaused(true)
     setDragging(true)
-    event.currentTarget.setPointerCapture(event.pointerId)
+    // Capture keeps a fast drag attached when the pointer leaves the element. It is an
+    // enhancement, not a requirement: without it the drag still works, so never let a missing
+    // implementation throw during a gesture.
+    event.currentTarget.setPointerCapture?.(event.pointerId)
   }
 
-  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const onPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
     const state = drag.current
     if (!state || state.id !== event.pointerId) return
     const perPixel = 0.32 / camera.zoom
-    const dx = (event.clientX - state.x) * perPixel
+    // Grab-the-globe, not move-the-camera: dragging right must carry the surface right, which
+    // means rotating the projection the opposite way. Getting this backwards is the difference
+    // between holding a globe and fighting one.
+    const dx = -(event.clientX - state.x) * perPixel
     const dy = (event.clientY - state.y) * perPixel
     if (Math.abs(event.clientX - state.x) + Math.abs(event.clientY - state.y) > 3) state.moved = true
     state.x = event.clientX
     state.y = event.clientY
-    spin.current = { lon: dx, lat: -dy }
-    set({ ...current.current, lon: current.current.lon + dx, lat: current.current.lat - dy })
+    spin.current = { lon: dx, lat: dy }
+    set({ ...current.current, lon: current.current.lon + dx, lat: current.current.lat + dy })
   }
 
-  const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const onPointerUp = (event: ReactPointerEvent<HTMLElement>) => {
     const state = drag.current
     if (!state || state.id !== event.pointerId) return
     drag.current = null
     setDragging(false)
+    // A drag that ends on a label must not also count as tapping that label.
+    swallowClick.current = state.moved
     // Releasing mid-flick keeps a little momentum, then stops. Without decay the globe either
     // stops dead or never stops, and both read as a bug.
     if (state.moved) {
@@ -189,11 +203,12 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const step = 6 / camera.zoom
+    // Same sense as a drag: ArrowRight pushes the globe to the right.
     const moves: Record<string, [number, number]> = {
-      ArrowLeft: [-step, 0],
-      ArrowRight: [step, 0],
-      ArrowUp: [0, step],
-      ArrowDown: [0, -step],
+      ArrowLeft: [step, 0],
+      ArrowRight: [-step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
     }
     const move = moves[event.key]
     if (!move) return
@@ -220,12 +235,25 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
   return (
     <section
       aria-label="School map"
-      onPointerDown={() => setPaused(true)}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onClickCapture={(event) => {
+        // The gesture already did something; do not let the same finger also press what it
+        // happened to land on.
+        if (!swallowClick.current) return
+        swallowClick.current = false
+        event.preventDefault()
+        event.stopPropagation()
+      }}
       onFocusCapture={() => setPaused(true)}
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false)
       }}
-      className="relative isolate h-[clamp(500px,72svh,760px)] w-full overflow-hidden bg-[var(--canvas)]"
+      className={`relative isolate h-[clamp(500px,72svh,760px)] w-full touch-none select-none overflow-hidden bg-[var(--canvas)] ${
+        dragging ? 'cursor-grabbing' : 'cursor-grab'
+      }`}
     >
       {/* Atmospheric lights are attached to the map, so the globe grows out of the page rather
           than sitting inside another bordered panel. */}
@@ -265,14 +293,8 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
         role="application"
         tabIndex={0}
         aria-label={`Rotatable globe showing ${located.length} school locations. Use the arrow keys to rotate.`}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
         onKeyDown={onKeyDown}
-        className={`absolute inset-0 touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)] ${
-          dragging ? 'cursor-grabbing' : 'cursor-grab'
-        }`}
+        className="absolute inset-0 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
       >
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}

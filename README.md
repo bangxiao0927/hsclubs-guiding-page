@@ -116,9 +116,12 @@ being pinned arbitrarily. Choosing a pin animates a spherical rotation and zoom;
 HTML above the SVG, so they stay legible and keyboard reachable. The basemap is a simplified land
 outline vendored into the bundle, which means no tile server ever learns who is reading this page.
 
-The globe is draggable: grab it and it rotates under the pointer, a flick keeps a little momentum
-and decays, and arrow keys rotate it for anyone not using a pointer. `touch-action: none` means a
-phone spins the earth instead of scrolling the page. With two or more mapped schools it also runs
+The globe is draggable anywhere on it -- including on a school label -- and it rotates *with* the
+gesture: drag right and the surface travels right, as if the sphere were under your hand. A flick
+keeps a little momentum and decays; the arrow keys rotate the same way for anyone not using a
+pointer. `touch-action: none` means a phone spins the earth instead of scrolling the page, and a
+drag that ends on a label is not also treated as tapping it. With two or more mapped schools it
+also runs
 a tour, starting on the first real school and rotating to the next every 5.2 seconds, with a
 progress line showing when the camera will move next. Any drag, tap or keypress takes control
 immediately -- a tween must never fight a finger -- and **Resume tour** hands it back. Demo
