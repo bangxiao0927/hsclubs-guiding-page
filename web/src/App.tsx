@@ -126,7 +126,6 @@ export const App = () => {
         title={payload?.title ?? 'HS Clubs'}
         theme={theme}
         onToggleTheme={toggleTheme}
-        onOpenSwitcher={() => setSwitcher(true)}
       />
       <main id="top" className="pb-24 sm:pb-0">
         {schools.length > 0 ? <SchoolMap schools={schools} /> : <Hero totals={totals} schools={schools} />}
