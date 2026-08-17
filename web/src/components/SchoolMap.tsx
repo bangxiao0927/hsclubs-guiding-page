@@ -69,7 +69,8 @@ const useCamera = (target: Camera, hold: boolean) => {
     const reduced =
       typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
     if (reduced) {
-      set(target)
+      // Reduced motion cuts the animation, not the person's zoom choice.
+      set({ lon: target.lon, lat: target.lat, zoom: current.current.zoom })
       return
     }
 
@@ -84,7 +85,9 @@ const useCamera = (target: Camera, hold: boolean) => {
       set({
         lon: from.lon + delta * eased,
         lat: from.lat + (target.lat - from.lat) * eased,
-        zoom: from.zoom + (target.zoom - from.zoom) * eased,
+        // Auto-return and tour moves rotate the globe without resizing it: the zoom a person
+        // chose is the zoom they keep.
+        zoom: from.zoom,
       })
       if (progress < 1) frame.current = requestAnimationFrame(step)
     }
@@ -432,6 +435,7 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
         />
         <path
           data-testid="globe-land"
+          data-zoom={camera.zoom.toFixed(3)}
           d={landPath}
           fill="var(--surface-2)"
           stroke="var(--line-strong)"
