@@ -186,10 +186,9 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
     spin.current = { lon: 0, lat: 0 }
     setPaused(true)
     setDragging(true)
-    // Capture keeps a fast drag attached when the pointer leaves the element. It is an
-    // enhancement, not a requirement: without it the drag still works, so never let a missing
-    // implementation throw during a gesture.
-    event.currentTarget.setPointerCapture?.(event.pointerId)
+    // Do not capture here. Capturing on every press steals the click from links laid over the
+    // globe, so a tap that should open a school stays on this section instead of navigating.
+    // Capture starts only once the pointer is demonstrably dragging.
   }
 
   const onPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
@@ -201,7 +200,12 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
     // between holding a globe and fighting one.
     const dx = -(event.clientX - state.x) * perPixel
     const dy = (event.clientY - state.y) * perPixel
-    if (Math.abs(event.clientX - state.x) + Math.abs(event.clientY - state.y) > 3) state.moved = true
+    if (!state.moved && Math.abs(event.clientX - state.x) + Math.abs(event.clientY - state.y) > 3) {
+      state.moved = true
+      // From this point on it is a drag: keep receiving events even if the pointer leaves the
+      // globe. A tap never reaches this line, so links above the globe stay clickable.
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+    }
     state.x = event.clientX
     state.y = event.clientY
     spin.current = { lon: dx, lat: dy }
