@@ -151,4 +151,27 @@ describe('SchoolMap', () => {
     await vi.advanceTimersByTimeAsync(3_000)
     expect(screen.getByRole('heading').textContent).toBe('Alpha High')
   })
+
+  it('returns to the tour without changing the zoom the person chose', async () => {
+    vi.useFakeTimers()
+    render(
+      <SchoolMap
+        schools={[
+          school('a', 'Alpha High', { lat: 37.4, lon: -122.1 }),
+          school('b', 'Beta High', { lat: 35.7, lon: 139.7 }),
+        ]}
+      />,
+    )
+    const zoom = () => screen.getByTestId('globe-land').getAttribute('data-zoom')
+    const globe = screen.getByRole('application')
+
+    fireEvent.keyDown(globe, { key: 'ArrowRight' })
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    const chosen = zoom()
+
+    await vi.advanceTimersByTimeAsync(3_000)
+
+    expect(screen.getByRole('heading').textContent).toBe('Alpha High')
+    expect(zoom()).toBe(chosen)
+  })
 })
