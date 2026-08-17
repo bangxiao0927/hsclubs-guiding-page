@@ -78,7 +78,7 @@ const useCamera = (target: Camera, hold: boolean) => {
     let started = 0
     const step = (time: number) => {
       if (!started) started = time
-      const progress = Math.min(1, (time - started) / 900)
+      const progress = Math.min(1, (time - started) / 1800)
       const eased = 1 - Math.pow(1 - progress, 3)
       // Rotate the short way round, so a fly-to never spins the long way across the Pacific.
       const delta = wrapLon(target.lon - from.lon)
