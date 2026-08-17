@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { School } from '../types'
-import { SchoolMap } from './SchoolMap'
+import { rotationDurationMs, SchoolMap, sphericalCameraAt } from './SchoolMap'
 
 const school = (slug: string, name: string, location: School['location']): School => ({
   slug,
@@ -46,7 +46,29 @@ describe('SchoolMap', () => {
     expect(screen.queryByRole('link', { name: /Beta High/ })).not.toBeInTheDocument()
     // A school without coordinates is reported, never pinned to a guess.
     expect(screen.getByText('1 school awaiting a confirmed location')).toBeInTheDocument()
+})
+
+describe('the globe camera path', () => {
+  const california = { lon: -122.067, lat: 37.359, zoom: 2 }
+  const tokyo = { lon: 139.65, lat: 35.676, zoom: 1 }
+
+  it('follows a great-circle rotation instead of sliding lon/lat on a flat map', () => {
+    const halfway = sphericalCameraAt(california, tokyo, 0.5)
+
+    // The shortest spherical arc bows north across the Pacific; a flat interpolation would be
+    // ~36.5 degrees throughout and visually reads as a map pan rather than a turning earth.
+    expect(halfway.lat).toBeGreaterThan(45)
+    expect(halfway.zoom).toBe(california.zoom)
   })
+
+  it('takes longer to rotate across an ocean than to correct a small nudge', () => {
+    const nearby = { ...california, lon: california.lon + 5 }
+
+    expect(rotationDurationMs(california, tokyo)).toBeGreaterThan(
+      rotationDurationMs(california, nearby),
+    )
+  })
+})
 
   // The guide's job is to hand off: a pin goes straight to the school's own origin.
   it('links each pin to the school site rather than trapping the visitor', () => {

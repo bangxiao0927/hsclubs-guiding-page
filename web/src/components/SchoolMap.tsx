@@ -1,4 +1,4 @@
-import { geoDistance, geoGraticule10, geoOrthographic, geoPath } from 'd3-geo'
+import { geoDistance, geoGraticule10, geoInterpolate, geoOrthographic, geoPath } from 'd3-geo'
 import type { Feature, MultiPolygon } from 'geojson'
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 
@@ -14,6 +14,10 @@ const GLOBE_Y = 365
 const BASE_SCALE = 345
 const MIN_ZOOM = 0.75
 const MAX_ZOOM = 3
+/** Constant angular speed makes a camera move read as a turning globe, not a timed slide. */
+const ROTATION_DEGREES_PER_SECOND = 28
+const MIN_ROTATION_MS = 500
+const MAX_ROTATION_MS = 5_500
 
 const landFeature: Feature<MultiPolygon> = {
   type: 'Feature',
@@ -21,10 +25,25 @@ const landFeature: Feature<MultiPolygon> = {
   geometry: { type: 'MultiPolygon', coordinates: land as number[][][][] },
 }
 
-interface Camera {
+export interface Camera {
   lon: number
   lat: number
   zoom: number
+}
+
+export const rotationDurationMs = (from: Camera, target: Camera): number => {
+  const angle = geoDistance([from.lon, from.lat], [target.lon, target.lat]) * (180 / Math.PI)
+  return Math.max(
+    MIN_ROTATION_MS,
+    Math.min(MAX_ROTATION_MS, (angle / ROTATION_DEGREES_PER_SECOND) * 1000),
+  )
+}
+
+/** One frame of a true spherical camera rotation, exported so the geometry is regression-tested. */
+export const sphericalCameraAt = (from: Camera, target: Camera, progress: number): Camera => {
+  const eased = progress * progress * (3 - 2 * progress)
+  const [lon, lat] = geoInterpolate([from.lon, from.lat], [target.lon, target.lat])(eased)
+  return { lon, lat, zoom: from.zoom }
 }
 
 const meanCamera = (schools: School[]): Camera => {
@@ -47,6 +66,10 @@ const wrapLon = (lon: number) => ((((lon + 180) % 360) + 360) % 360) - 180
  * and direct control while a pointer or key is driving it. `hold` exists so a drag is not fighting
  * a tween for the same value -- an animation that keeps re-centring under someone's finger feels
  * broken, however smooth it is.
+ *
+ * This rotation is spatial navigation, not decorative motion: skipping it makes a school jump
+ * from one side of the planet to another with no continuity. The camera therefore still turns
+ * under reduced-motion; pulses, reveals and other decoration remain disabled by CSS.
  */
 const useCamera = (target: Camera, hold: boolean) => {
   const [camera, setCamera] = useState(target)
@@ -66,29 +89,17 @@ const useCamera = (target: Camera, hold: boolean) => {
 
   useEffect(() => {
     if (hold) return
-    const reduced =
-      typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (reduced) {
-      // Reduced motion cuts the animation, not the person's zoom choice.
-      set({ lon: target.lon, lat: target.lat, zoom: current.current.zoom })
-      return
-    }
-
     const from = current.current
+    // `geoInterpolate` follows the shortest great-circle arc on a sphere. Interpolating lon/lat
+    // independently is a flat-map slide and produces the wrong path near the date line and poles.
+    const duration = rotationDurationMs(from, target)
     let started = 0
     const step = (time: number) => {
       if (!started) started = time
-      const progress = Math.min(1, (time - started) / 1800)
-      const eased = 1 - Math.pow(1 - progress, 3)
-      // Rotate the short way round, so a fly-to never spins the long way across the Pacific.
-      const delta = wrapLon(target.lon - from.lon)
-      set({
-        lon: from.lon + delta * eased,
-        lat: from.lat + (target.lat - from.lat) * eased,
-        // Auto-return and tour moves rotate the globe without resizing it: the zoom a person
-        // chose is the zoom they keep.
-        zoom: from.zoom,
-      })
+      const progress = Math.min(1, (time - started) / duration)
+      // Nearly constant angular velocity with a short ease at either end. Distance determines
+      // duration, so crossing an ocean visibly takes longer than correcting a small nudge.
+      set(sphericalCameraAt(from, target, progress))
       if (progress < 1) frame.current = requestAnimationFrame(step)
     }
     frame.current = requestAnimationFrame(step)
