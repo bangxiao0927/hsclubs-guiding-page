@@ -70,6 +70,15 @@ describe('SchoolMap', () => {
     expect(left()).toBeGreaterThan(before)
   })
 
+  it('zooms the globe with the on-screen controls', () => {
+    render(<SchoolMap schools={[school('a', 'Alpha High', { lat: 0, lon: 0 })]} />)
+    const before = landPath()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+
+    expect(landPath()).not.toBe(before)
+  })
+
   // One unusable value would project every coordinate to NaN and blank the entire globe.
   it('refuses a camera it cannot draw', () => {
     render(<SchoolMap schools={[school('a', 'Alpha High', { lat: 0, lon: 0 })]} />)
