@@ -12,6 +12,8 @@ const HEIGHT = 650
 const GLOBE_X = WIDTH / 2
 const GLOBE_Y = 365
 const BASE_SCALE = 345
+const MIN_ZOOM = 0.75
+const MAX_ZOOM = 3
 
 const landFeature: Feature<MultiPolygon> = {
   type: 'Feature',
@@ -119,6 +121,8 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
   const swallowClick = useRef(false)
   const active = located.find((school) => school.slug === focus) ?? null
   const idle = useRef(0)
+  const svg = useRef<SVGSVGElement>(null)
+  const surface = useRef<HTMLElement>(null)
 
   // After a few seconds of no input the globe returns to its tour on its own, so a page left
   // open keeps moving rather than freezing wherever it was last nudged. Every interaction
@@ -260,6 +264,56 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
     resumeTour()
   }
 
+  /**
+   * Zoom with the point under the pointer held still.
+   *
+   * A map that zooms away from the thing the visitor is looking at feels broken. The projection
+   * is inverted under the cursor, that point becomes the new camera centre, and the scale is
+   * clamped so the earth can neither vanish nor fill the screen past recognition.
+   */
+  const zoomBy = (factor: number, clientX?: number, clientY?: number) => {
+    const next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, camera.zoom * factor))
+    if (next === camera.zoom) return
+
+    let lon = current.current.lon
+    let lat = current.current.lat
+    if (clientX !== undefined && clientY !== undefined && svg.current) {
+      const rect = svg.current.getBoundingClientRect()
+      const scale = rect.width / WIDTH
+      const x = (clientX - rect.left) / scale
+      const y = (clientY - rect.top) / scale
+      const geo = projection.invert?.([x, y])
+      if (geo) {
+        lon = geo[0]
+        lat = geo[1]
+      }
+    }
+
+    set({ lon, lat, zoom: next })
+    setFree(true)
+    setPaused(true)
+    resumeTour()
+  }
+
+  // React's synthetic wheel listener is passive, so a native non-passive listener is the only
+  // way to stop the browser scrolling the page while someone zooms the globe.
+  const zoomRef = useRef<(factor: number, clientX?: number, clientY?: number) => void>(() => {})
+  zoomRef.current = zoomBy
+  useEffect(() => {
+    const element = surface.current
+    if (!element) return
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      zoomRef.current(event.deltaY < 0 ? 1.15 : 1 / 1.15, event.clientX, event.clientY)
+    }
+    element.addEventListener('wheel', onWheel, { passive: false })
+    return () => element.removeEventListener('wheel', onWheel)
+  }, [])
+
+  const onDoubleClick = (event: React.MouseEvent) => {
+    zoomBy(1.6, event.clientX, event.clientY)
+  }
+
   const projection = useMemo(
     () =>
       geoOrthographic()
@@ -276,11 +330,13 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
 
   return (
     <section
+      ref={surface}
       aria-label="School map"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onDoubleClick={onDoubleClick}
       onClickCapture={(event) => {
         // The gesture already did something; do not let the same finger also press what it
         // happened to land on.
@@ -339,6 +395,7 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
         className="absolute inset-0 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--accent)]"
       >
       <svg
+        ref={svg}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         preserveAspectRatio="xMidYMid meet"
         className="pointer-events-none absolute inset-0 h-full w-full"
@@ -445,6 +502,28 @@ export const SchoolMap = ({ schools }: { schools: School[] }) => {
             </a>
           )
         })}
+      </div>
+
+      <div className="absolute right-[clamp(0.75rem,2vw,1.5rem)] top-1/2 z-20 flex -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--header-bg)] shadow-xl backdrop-blur-xl">
+        <button
+          type="button"
+          onClick={() => zoomBy(1.35)}
+          disabled={camera.zoom >= MAX_ZOOM}
+          aria-label="Zoom in"
+          className="grid h-10 w-10 cursor-pointer place-items-center text-lg font-semibold transition hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-35"
+        >
+          <span aria-hidden>+</span>
+        </button>
+        <span aria-hidden className="h-px bg-[var(--line)]" />
+        <button
+          type="button"
+          onClick={() => zoomBy(1 / 1.35)}
+          disabled={camera.zoom <= MIN_ZOOM}
+          aria-label="Zoom out"
+          className="grid h-10 w-10 cursor-pointer place-items-center text-lg font-semibold transition hover:bg-[var(--surface-2)] disabled:cursor-not-allowed disabled:opacity-35"
+        >
+          <span aria-hidden>&minus;</span>
+        </button>
       </div>
 
       <div className="absolute bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-[clamp(1.15rem,4vw,3.5rem)] right-[clamp(1.15rem,4vw,3.5rem)] z-10 flex flex-wrap items-end justify-between gap-3">
