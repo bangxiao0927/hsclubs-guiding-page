@@ -104,11 +104,16 @@ viewport and are searchable by school or host, sortable, filterable by category,
 detail drawer for what a card has no room for. The one link that leaves goes to the school's own
 origin: the origin verification proved control of.
 
-The nine-dot launcher in the header is an app switcher: it keeps the current Guide distinct from
-the independent school apps, names the host before a visitor leaves, and carries live/demo status
-into the choice. Mobile adds the same switcher to a thumb-reachable bottom dock alongside Guide
-and Browse. Category facets become one horizontally scrolling, snap-aligned rail on a narrow
-screen rather than fourteen chips pushing the actual schools several screens down.
+The mobile bottom dock includes an app switcher: it keeps the current Guide distinct from the
+independent school apps, names the host before a visitor leaves, and carries live/demo status into
+the choice. Guide and Browse sit beside it within thumb reach. Category facets become one
+horizontally scrolling, snap-aligned rail on a narrow screen rather than fourteen chips pushing
+the actual schools several screens down.
+
+On mobile, the profile icon to the right of the theme control opens a user centre. It does not
+invent a guide-wide account: profiles belong to each independent school app, so the panel lists
+only real participating schools and links to that school's `/profile`; Demo is intentionally not
+offered as an account.
 
 Coordinates come only from `location` in the registry -- confirmed by the operator, never guessed
 from an absent address -- so a school without one is counted as awaiting a location instead of
