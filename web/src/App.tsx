@@ -8,7 +8,6 @@ import { SchoolCard } from './components/SchoolCard'
 import { SchoolDrawer } from './components/SchoolDrawer'
 import { SchoolMap } from './components/SchoolMap'
 import { SchoolSwitcher } from './components/SchoolSwitcher'
-import { UserCenter } from './components/UserCenter'
 import { filterByCategories, searchSchools, sortSchools, type SortKey } from './filters'
 import type { PagePayload, School } from './types'
 import { useTheme } from './useTheme'
@@ -46,7 +45,6 @@ export const App = () => {
   const [view, setView] = useState(() => readViewState(location.search))
   const [open, setOpen] = useState<School | null>(null)
   const [switcher, setSwitcher] = useState(false)
-  const [userCenter, setUserCenter] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -128,7 +126,6 @@ export const App = () => {
         title={payload?.title ?? 'HS Clubs'}
         theme={theme}
         onToggleTheme={toggleTheme}
-        onOpenUserCenter={() => setUserCenter(true)}
       />
       <main id="top" className="pb-24 sm:pb-0">
         {schools.length > 0 ? <SchoolMap schools={schools} /> : <Hero totals={totals} schools={schools} />}
@@ -201,7 +198,6 @@ export const App = () => {
       </main>
       <SchoolDrawer school={open} onClose={() => setOpen(null)} />
       <SchoolSwitcher schools={schools} open={switcher} onClose={() => setSwitcher(false)} />
-      <UserCenter schools={schools} open={userCenter} onClose={() => setUserCenter(false)} />
       <MobileDock onOpenSwitcher={() => setSwitcher(true)} />
     </>
   )
