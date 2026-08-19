@@ -22,6 +22,8 @@ export interface ServeOptions {
   render: () => Promise<string> | string
   /** The payload behind GET /api/schools. */
   api?: () => Promise<unknown> | unknown
+  /** The payload behind GET /api/v1/schools, the minimal directory the iOS app reads. */
+  appApi?: () => Promise<unknown> | unknown
   /** Operational state and recent alert transitions behind GET /api/status. */
   statusApi?: () => Promise<unknown> | unknown
   /** Directory of built assets, if one has been built. */
@@ -76,6 +78,7 @@ const sendFile = async (res: import('node:http').ServerResponse, file: string, h
 export const createPageServer = ({
   render,
   api,
+  appApi,
   statusApi,
   staticDir = null,
   host = '127.0.0.1',
@@ -96,8 +99,9 @@ export const createPageServer = ({
       )
     }
 
-    if (path === '/api/schools' || path === '/api/status') {
-      const build = path === '/api/status' ? statusApi : api
+    if (path === '/api/schools' || path === '/api/v1/schools' || path === '/api/status') {
+      const build =
+        path === '/api/status' ? statusApi : path === '/api/v1/schools' ? appApi : api
       if (!build) {
         res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found\n')
         return

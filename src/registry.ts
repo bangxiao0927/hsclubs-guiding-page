@@ -45,6 +45,8 @@ export interface SchoolEntry {
     /** 'ok', or the ManifestProblem from src/manifest.ts. */
     state: string
     detail: string | null
+    /** Whether the manifest declared mobile authentication support, when it was readable. */
+    mobileAuth?: boolean
   }
   /**
    * A fixture used to exercise the multi-school UI, not a participating school.
@@ -141,6 +143,9 @@ const parseEntry = (raw: unknown, index: number): SchoolEntry => {
               typeof integration['checkedAt'] === 'string' ? integration['checkedAt'] : null,
             state: integration['state'],
             detail: typeof integration['detail'] === 'string' ? integration['detail'] : null,
+            ...(typeof integration['mobileAuth'] === 'boolean'
+              ? { mobileAuth: integration['mobileAuth'] }
+              : {}),
           },
         }
       : {}),

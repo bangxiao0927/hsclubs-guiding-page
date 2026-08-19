@@ -285,6 +285,7 @@ describe('verification with an identity claim', () => {
       checkedAt: '2026-08-09T12:00:00.000Z',
       state: 'ok',
       detail: null,
+      mobileAuth: false,
     })
   })
 

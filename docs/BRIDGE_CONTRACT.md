@@ -12,6 +12,12 @@ template, this page and the iOS app share -- `/api/v1/summary`,
 `/.well-known/hsclubs-app.json`, `/api/v1/schools` and mobile authentication -- live as machine
 checkable schemas and fixtures in [`../contracts/v1/README.md`](../contracts/v1/README.md).
 
+This page also *produces* one v1 surface of its own: `GET /api/v1/schools`, the minimal directory
+the iOS app reads. It is assembled from the registry and the store, isolates a school whose
+configuration or record is bad as `incompatible` rather than failing the response, and is
+documented alongside the schemas it honours. The unversioned `/api/schools` the browser page uses
+is unchanged.
+
 ## The one endpoint
 
 `GET https://<school-host>/api/summary` -- anonymous, read-only, cross-origin readable.

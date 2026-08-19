@@ -84,6 +84,29 @@ describe('the page server', () => {
       expect(await response.json()).toEqual({ schools: [] })
     })
 
+    it('serves the app directory on its own versioned route', async () => {
+      const base = await start({
+        render: () => '<p>ok</p>',
+        api: () => ({ schools: ['web'] }),
+        appApi: () => ({ contract: 'hsclubs.app-directory', version: 1, schools: [] }),
+      })
+
+      // The app route and the web route are answered by different builders: the app must never
+      // be handed the browser payload it is not shaped to decode.
+      expect(await (await fetch(`${base}/api/v1/schools`)).json()).toEqual({
+        contract: 'hsclubs.app-directory',
+        version: 1,
+        schools: [],
+      })
+      expect(await (await fetch(`${base}/api/schools`)).json()).toEqual({ schools: ['web'] })
+    })
+
+    it('answers the app route 404 when no directory builder is configured', async () => {
+      const base = await start({ render: () => '<p>ok</p>', api: () => ({ schools: [] }) })
+
+      expect((await fetch(`${base}/api/v1/schools`)).status).toBe(404)
+    })
+
     it('reports a failure to build the payload as a 500, not a crash', async () => {
       const base = await start({
         render: () => '<p>ok</p>',
