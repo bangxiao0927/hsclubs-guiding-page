@@ -17,6 +17,7 @@
     "verify:all": "tsx src/cli.ts verify:all",
     "verify:watch": "tsx src/cli.ts verify:watch",
     "id:issue": "tsx src/cli.ts id:issue",
+    "release:check": "tsx src/cli.ts release:check",
     "contracts:check": "tsx src/cli.ts contracts:check",
     "contracts:manifest": "tsx src/cli.ts contracts:manifest",
     "web:dev": "npm --prefix web run dev",

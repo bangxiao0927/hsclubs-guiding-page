@@ -26,6 +26,8 @@ export interface ServeOptions {
   appApi?: () => Promise<unknown> | unknown
   /** Operational state and recent alert transitions behind GET /api/status. */
   statusApi?: () => Promise<unknown> | unknown
+  /** Called when a directory route is read, for legacy-usage metrics. Never sees user data. */
+  recordApiHit?: (route: 'legacy-schools' | 'v1-schools') => void
   /**
    * The Apple App Site Association JSON, or null when no production app id is configured.
    *
@@ -90,6 +92,7 @@ export const createPageServer = ({
   api,
   appApi,
   statusApi,
+  recordApiHit,
   appleAppSiteAssociation,
   mobileAuthFallback,
   staticDir = null,
@@ -153,6 +156,10 @@ export const createPageServer = ({
         res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found\n')
         return
       }
+      // Record the read before building the payload; the legacy path's usage is what the
+      // observation window is measuring, and the v1 path's is the other side of the same story.
+      if (path === '/api/schools') recordApiHit?.('legacy-schools')
+      else if (path === '/api/v1/schools') recordApiHit?.('v1-schools')
       void Promise.resolve()
         .then(build)
         .then((payload) => {

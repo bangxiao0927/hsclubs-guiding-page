@@ -1,4 +1,5 @@
 import type { StoredAlert } from './alertLog.js'
+import type { RouteUsage, UsageRoute } from './legacyUsage.js'
 import { describeAge } from './renderPage.js'
 import type { SchoolRecord } from './store.js'
 
@@ -14,6 +15,8 @@ export interface StatusPayload {
     error: string | null
   }[]
   alerts: StoredAlert[]
+  /** Read counts for the versioned and unversioned directory endpoints; no user data. */
+  usage?: Record<UsageRoute, RouteUsage>
 }
 
 /**
@@ -27,6 +30,7 @@ export const buildStatusPayload = (
   records: SchoolRecord[],
   alerts: StoredAlert[],
   now = new Date(),
+  usage?: Record<UsageRoute, RouteUsage>,
 ): StatusPayload => {
   const schools = records.map((record) => ({
     slug: record.slug,
@@ -52,5 +56,6 @@ export const buildStatusPayload = (
           : `All ${schools.length} schools answering`,
     schools,
     alerts: alerts.slice(0, 50),
+    ...(usage ? { usage } : {}),
   }
 }
