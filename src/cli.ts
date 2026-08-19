@@ -13,6 +13,7 @@ import {
 } from './contracts.js'
 import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
 import { saveRegistry, withRegistryLock } from './registry.js'
+import { buildAppDirectory } from './appDirectory.js'
 import { issueSchoolId } from './schoolId.js'
 import { pageSchools } from './pageData.js'
 import { buildPayload } from './pagePayload.js'
@@ -211,14 +212,21 @@ const serve = async (): Promise<number> => {
       loadRegistry(registryPath()),
       SchoolStore.open(storePath()),
     ])
-    return pageSchools(entries, store)
+    return { entries, store }
   }
 
   const server = createPageServer({
     port: pagePort(),
     host: pageHost(),
     staticDir: webDir(),
-    api: async () => buildPayload(await read(), { title: pageTitle() }),
+    api: async () => {
+      const { entries, store } = await read()
+      return buildPayload(pageSchools(entries, store), { title: pageTitle() })
+    },
+    appApi: async () => {
+      const { entries, store } = await read()
+      return buildAppDirectory(entries, store)
+    },
     statusApi: async () => {
       const [store, alerts] = await Promise.all([
         SchoolStore.open(storePath()),
@@ -228,7 +236,10 @@ const serve = async (): Promise<number> => {
     },
     // Used when web/dist has not been built. Keeping it means a fresh checkout serves a working
     // page with `npm run serve` alone, with no build step on the machine that polls.
-    render: async () => renderPage(await read(), { title: pageTitle() }),
+    render: async () => {
+      const { entries, store } = await read()
+      return renderPage(pageSchools(entries, store), { title: pageTitle() })
+    },
   })
 
   const listening = await new Promise<string | null>((resolve) => {

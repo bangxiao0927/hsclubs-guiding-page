@@ -193,5 +193,5 @@ const describeIntegration = (
   checkedAt: string,
 ): NonNullable<SchoolEntry['integration']> =>
   result.outcome === 'ok'
-    ? { checkedAt, state: 'ok', detail: null }
+    ? { checkedAt, state: 'ok', detail: null, mobileAuth: result.manifest.mobileAuth.supported }
     : { checkedAt, state: result.problem, detail: result.detail }
