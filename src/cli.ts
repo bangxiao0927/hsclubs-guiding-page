@@ -14,6 +14,8 @@ import {
 import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
 import { saveRegistry, withRegistryLock } from './registry.js'
 import { buildAppDirectory } from './appDirectory.js'
+import { LegacyUsage } from './legacyUsage.js'
+import { assessRelease } from './releaseReadiness.js'
 import { buildAppleAppSiteAssociation, renderMobileAuthFallback } from './mobileAuthCallback.js'
 import { issueSchoolId } from './schoolId.js'
 import { pageSchools } from './pageData.js'
@@ -40,6 +42,7 @@ import { challengeUrlFor, issueVerificationToken, verifySchool } from './verifyS
  *   npm run verify:all               re-check every listed school once
  *   npm run verify:watch             re-check now, then monthly by default
  *   npm run id:issue -- <slug>       issue the permanent schoolId for one school
+ *   npm run release:check            whether every real school is ready for the app release
  *   npm run contracts:check          v1 fixtures against v1 schemas, and the shared checksums
  *   npm run contracts:manifest       rewrite contracts/v1/manifest.json after an edit
  *
@@ -216,6 +219,10 @@ const serve = async (): Promise<number> => {
     return { entries, store }
   }
 
+  // Legacy-usage metrics live for the lifetime of the server process; the observation window is
+  // long, but any read is enough to answer "is the legacy path still in use?".
+  const usage = new LegacyUsage()
+
   const server = createPageServer({
     port: pagePort(),
     host: pageHost(),
@@ -228,6 +235,7 @@ const serve = async (): Promise<number> => {
       const { entries, store } = await read()
       return buildAppDirectory(entries, store)
     },
+    recordApiHit: (route) => usage.record(route),
     // The official domain (clubs.bangxiao.net) hosts the app's Universal Link return channel.
     // The app id comes from the deployment; without it, no association is published.
     appleAppSiteAssociation: () => buildAppleAppSiteAssociation(process.env['HSCLUBS_IOS_APP_ID'] ?? null),
@@ -237,7 +245,7 @@ const serve = async (): Promise<number> => {
         SchoolStore.open(storePath()),
         AlertLog.open(alertPath()),
       ])
-      return buildStatusPayload(store.all(), alerts.all())
+      return buildStatusPayload(store.all(), alerts.all(), new Date(), usage.snapshot())
     },
     // Used when web/dist has not been built. Keeping it means a fresh checkout serves a working
     // page with `npm run serve` alone, with no build step on the machine that polls.
@@ -467,6 +475,32 @@ const checkContracts = (): number => {
   return 0
 }
 
+/**
+ * Reports whether every real school is ready for the app to be released.
+ *
+ * A fast pre-flight over the registry -- identity issued, verified, manifest checked clean -- run
+ * before the slower end-to-end gate. Demo schools are shown but never block. See
+ * docs/RELEASE_RUNBOOK.md.
+ */
+const releaseCheck = async (): Promise<number> => {
+  const entries = await loadRegistry(registryPath())
+  const readiness = assessRelease(entries)
+  for (const school of readiness.schools) {
+    const label = school.demo ? `${school.slug} (demo)` : school.slug
+    if (school.ready) {
+      console.log(`  ok    ${label}`)
+    } else {
+      console.error(`  BLOCK ${label}: ${school.blockers.join('; ')}`)
+    }
+  }
+  if (!readiness.ready) {
+    console.error('release blocked: not every real school is ready')
+    return 1
+  }
+  console.log('release ready: every real school passes identity, verification and manifest checks')
+  return 0
+}
+
 const writeContractsManifest = async (): Promise<number> => {
   const { writeFile } = await import('node:fs/promises')
   await writeFile(MANIFEST_FILE, `${JSON.stringify(computeManifest(), null, 2)}\n`, 'utf8')
@@ -497,13 +531,15 @@ const main = async (): Promise<number> => {
     case 'id:issue':
       if (!argument) throw new Error('Usage: npm run id:issue -- <slug>')
       return issueIdentity(argument)
+    case 'release:check':
+      return releaseCheck()
     case 'contracts:check':
       return checkContracts()
     case 'contracts:manifest':
       return writeContractsManifest()
     case undefined:
       console.error(
-        'Usage: npm run poll -- <slug> | npm run poll:all | npm run watch | npm run serve | npm run verify:* | npm run contracts:*',
+        'Usage: npm run poll -- <slug> | npm run poll:all | npm run watch | npm run serve | npm run verify:* | npm run id:issue | npm run release:check | npm run contracts:*',
       )
       return 2
     default:
