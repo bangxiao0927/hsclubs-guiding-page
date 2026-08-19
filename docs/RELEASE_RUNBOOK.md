@@ -61,8 +61,9 @@ ordinary work. A failed gate blocks the release and alerts; it does not fail unr
 
 `/api/summary` (template) and `/api/schools` (guiding page) keep working through the window. The
 guiding page counts reads of `/api/schools` and `/api/v1/schools` (see `GET /api/status`, the
-`usage` field): counts and first/last timestamps only, never any user data. The template records
-the equivalent for `/api/summary`.
+`usage` field): counts and first/last timestamps only, never any user data, persisted to
+`HSCLUBS_USAGE_STORE` (default `data/usage.json`) so the window survives restarts. The template
+records the equivalent for `/api/summary` and `/api/v1/summary` (`SummaryUsage`).
 
 Retiring a legacy endpoint is out of scope here and must not happen in this issue. It needs, in
 writing: every listed school on v1, a stated observation window with no non-app reads of the legacy

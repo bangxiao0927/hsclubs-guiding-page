@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import {
   loadRegistry,
   parseRegistry,
+  parseRegistryLenient,
   pollableSchools,
   RegistryError,
   saveRegistry,
@@ -84,6 +85,33 @@ describe('parseRegistry', () => {
   it('rejects a registry that is not an object with schools', () => {
     expect(() => parseRegistry([])).toThrow(RegistryError)
     expect(() => parseRegistry({ schools: {} })).toThrow(RegistryError)
+  })
+})
+
+describe('parseRegistryLenient', () => {
+  // The serving path must not 500 the whole directory because one entry is bad.
+  it('drops a malformed entry and keeps the valid ones', () => {
+    const parsed = parseRegistryLenient({
+      schools: [entry(), entry({ slug: 'broken', summaryUrl: 'not a url' }), entry({ slug: 'ok' })],
+    })
+    expect(parsed.map((e) => e.slug)).toEqual(['mvhs', 'ok'])
+  })
+
+  it('keeps the first of a duplicated slug or schoolId, dropping the rest', () => {
+    const bySlug = parseRegistryLenient({ schools: [entry(), entry()] })
+    expect(bySlug).toHaveLength(1)
+
+    const byId = parseRegistryLenient({
+      schools: [
+        entry({ schoolId: 'sch_7Qb3Xf9KLm2ZpR4tVn6Y' }),
+        entry({ slug: 'other', schoolId: 'sch_7Qb3Xf9KLm2ZpR4tVn6Y' }),
+      ],
+    })
+    expect(byId.map((e) => e.slug)).toEqual(['mvhs'])
+  })
+
+  it('still refuses a registry that is not an object with schools', () => {
+    expect(() => parseRegistryLenient([])).toThrow(RegistryError)
   })
 })
 

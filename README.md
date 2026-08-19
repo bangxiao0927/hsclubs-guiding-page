@@ -74,6 +74,10 @@ Universal Link association at `/.well-known/apple-app-site-association`; unset, 
 rather than a placeholder. The static fallback at `/mobile-auth/callback` is always served and
 consumes nothing. See [`contracts/v1/README.md`](contracts/v1/README.md) and hsclubs-app#2.
 
+`HSCLUBS_USAGE_STORE` (default `data/usage.json`) is where read counts for `/api/schools` and
+`/api/v1/schools` persist across restarts, for the legacy observation window. It holds counts and
+timestamps only, never any user data.
+
 A school that stops answering is reported once, not hourly. After `HSCLUBS_ALERT_AFTER` failed
 polls in a row (3 by default) the pass prints `ALERT: ...` and, if `HSCLUBS_ALERT_WEBHOOK` is
 set, posts one JSON body there; recovery is reported the same way. Alerts fire on transitions

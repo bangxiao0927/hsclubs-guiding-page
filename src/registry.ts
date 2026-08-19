@@ -200,6 +200,48 @@ export const parseRegistry = (raw: unknown): SchoolEntry[] => {
 }
 
 /**
+ * Parses the registry for the serving path, isolating a bad entry instead of failing the whole
+ * file.
+ *
+ * The strict {@link parseRegistry} is right for the operator commands -- verify, issue, save --
+ * where a malformed registry should stop and be fixed. But the page and the app directory are read
+ * on every request, and there one mistyped URL or a duplicated slug must not take the whole
+ * directory down: the offending entry is dropped with a logged reason and every other school is
+ * still served. Dropping rather than surfacing is deliberate here -- a registry-level parse
+ * failure often means the identity itself is unusable, so there is nothing trustworthy to show.
+ */
+export const parseRegistryLenient = (raw: unknown): SchoolEntry[] => {
+  if (!isRecord(raw)) throw new RegistryError('registry must be a JSON object')
+  const schools = raw['schools']
+  if (!Array.isArray(schools)) throw new RegistryError('registry.schools must be an array')
+
+  const entries: SchoolEntry[] = []
+  const seenSlugs = new Set<string>()
+  const seenIds = new Set<string>()
+  schools.forEach((raw, index) => {
+    let entry: SchoolEntry
+    try {
+      entry = parseEntry(raw, index)
+    } catch (error) {
+      console.error(`Skipping registry entry ${index}: ${error instanceof Error ? error.message : String(error)}`)
+      return
+    }
+    if (seenSlugs.has(entry.slug)) {
+      console.error(`Skipping a second registry entry with the slug ${entry.slug}`)
+      return
+    }
+    if (entry.schoolId !== undefined && seenIds.has(entry.schoolId)) {
+      console.error(`Skipping ${entry.slug}: its schoolId ${entry.schoolId} is already used`)
+      return
+    }
+    seenSlugs.add(entry.slug)
+    if (entry.schoolId !== undefined) seenIds.add(entry.schoolId)
+    entries.push(entry)
+  })
+  return entries
+}
+
+/**
  * Strips a UTF-8 byte order mark.
  *
  * This job is operated from a Windows machine, where saving a file from Notepad or PowerShell
@@ -227,6 +269,25 @@ export const loadRegistry = async (path: string): Promise<SchoolEntry[]> => {
   }
   try {
     return parseRegistry(JSON.parse(withoutByteOrderMark(contents)))
+  } catch (error) {
+    if (error instanceof RegistryError) throw error
+    throw new RegistryError(`The registry at ${path} is not valid JSON: ${String(error)}`)
+  }
+}
+
+/**
+ * Loads the registry for the serving path, dropping any single unusable entry rather than failing
+ * the whole read. A missing or non-JSON file is still a hard error -- there is nothing to serve.
+ */
+export const loadRegistryForServing = async (path: string): Promise<SchoolEntry[]> => {
+  let contents: string
+  try {
+    contents = await readFile(path, 'utf8')
+  } catch (error) {
+    throw new RegistryError(`Could not read the registry at ${path}: ${String(error)}`)
+  }
+  try {
+    return parseRegistryLenient(JSON.parse(withoutByteOrderMark(contents)))
   } catch (error) {
     if (error instanceof RegistryError) throw error
     throw new RegistryError(`The registry at ${path} is not valid JSON: ${String(error)}`)
