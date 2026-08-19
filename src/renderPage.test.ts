@@ -12,6 +12,7 @@ const record = (overrides: Partial<SchoolRecord> = {}): SchoolRecord => ({
     schoolName: 'Mountain View High School',
     shortName: 'MVHS',
     slug: 'mvhs',
+    schoolId: null,
     address: '3535 Truman Ave, Mountain View, CA 94040',
     status: 'active',
     clubCount: 106,

@@ -18,6 +18,7 @@ configuration) and back it up like any other operational data.
   "schools": [
     {
       "slug": "mvhs",
+      "schoolId": "sch_7Qb3Xf9KLm2ZpR4tVn6Y",
       "summaryUrl": "https://mvhs.example.org/api/summary",
       "verification": {
         "token": "issued-once-by-the-operator",
@@ -26,12 +27,23 @@ configuration) and back it up like any other operational data.
         "lastError": null,
         "state": "verified"
       },
-      "listed": true
+      "listed": true,
+      "integration": {
+        "checkedAt": "2026-08-08T12:00:00Z",
+        "state": "ok",
+        "detail": null
+      }
     }
   ]
 }
 ```
 
+- `schoolId` is the school's permanent identity, issued here and used by every repository. It is
+  opaque (`sch_` and then alphanumerics), it is never derived from anything, and it never
+  changes: a school that renames itself, changes its slug or moves to an approved new host keeps
+  the same identity, because the app, the caches and the sessions that already refer to it are
+  referring to *that school*. A demo entry's identity begins `sch_demo` so a fixture is
+  recognisable wherever it appears. See [`../contracts/v1/README.md`](../contracts/v1/README.md).
 - `summaryUrl` is the only address this repo ever fetches for that school.
 - `state` is `pending`, `verified`, or `failing`. Only `verified` schools are shown.
 - `verifiedAt` is the last successful proof; `lastCheckedAt` says when the latest attempt ran,
@@ -52,6 +64,31 @@ configuration) and back it up like any other operational data.
   null, and geocoding free text would drop a guessed pin on a real institution. A malformed or
   out-of-range pair is a hard registry error, while an absent one is normal -- the map plots the
   schools it knows and reports the rest as awaiting a confirmed location.
+- `integration` is written by the verification pass and records what the school's
+  `/.well-known/hsclubs-app.json` said: `ok`, or `absent`, `unreachable`, `invalid`,
+  `id-missing`, `id-mismatch`, `slug-mismatch`, `origin-mismatch` with a `detail` line. It is
+  diagnosis, not a switch -- see below for which of those revoke verification.
+
+## Identity
+
+A school gets its identity once:
+
+```bash
+npm run id:issue -- mvhs
+```
+
+The command refuses to run twice for the same school. Give the printed value to the school; its
+deployment configures it and then publishes it in two places -- the v1 summary and
+`/.well-known/hsclubs-app.json` -- and both must match the registry.
+
+What changes an identity: nothing. A school that renames itself, adopts a new slug or moves to an
+approved host keeps it. A genuinely different school is a removal and an addition, and its
+identity is a new one; identities are never reused.
+
+Schools registered before identities existed simply have no `schoolId`. They keep being polled,
+verified and listed exactly as before -- they cannot appear on the v1 app surface until an
+identity is issued and the school publishes it, which is what makes the migration incremental
+rather than a flag day.
 
 ## Verifying a school
 
@@ -64,10 +101,18 @@ configuration) and back it up like any other operational data.
    means the operator of that origin is the one who was given the token.
 4. The `slug` in that origin's `/api/summary` must equal the `slug` in the registry entry. This
    stops a verified school from claiming a different school's identity.
+5. If the registry has issued an identity, a summary that stamps a *different* one is refused,
+   and the school's manifest is read and compared. Publishing another school's identity, or
+   pointing the manifest's origin somewhere off the verified host, revokes verification
+   immediately: continuing to list that school would carry the mistake into every consumer.
+   Everything else the manifest can do wrong -- absent, unreachable, malformed, or a slug the
+   registry has not caught up with -- is recorded in `integration` and changes nothing else,
+   because that is what a normal migration looks like.
 
 The tooling performs that sequence:
 
 ```bash
+npm run id:issue -- mvhs      # issues the permanent schoolId, once
 npm run verify:issue -- mvhs  # writes a new token into registry.json and prints what to publish
 npm run verify -- mvhs        # checks the challenge and the summary slug; writes the new state
 npm run verify:all            # one pass over every listed school

@@ -13,6 +13,7 @@ import {
 } from './contracts.js'
 import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
 import { saveRegistry, withRegistryLock } from './registry.js'
+import { issueSchoolId } from './schoolId.js'
 import { pageSchools } from './pageData.js'
 import { buildPayload } from './pagePayload.js'
 import { pollAllSchools } from './pollAll.js'
@@ -36,6 +37,7 @@ import { challengeUrlFor, issueVerificationToken, verifySchool } from './verifyS
  *   npm run verify -- <slug>         check one school's challenge + summary identity
  *   npm run verify:all               re-check every listed school once
  *   npm run verify:watch             re-check now, then monthly by default
+ *   npm run id:issue -- <slug>       issue the permanent schoolId for one school
  *   npm run contracts:check          v1 fixtures against v1 schemas, and the shared checksums
  *   npm run contracts:manifest       rewrite contracts/v1/manifest.json after an edit
  *
@@ -300,6 +302,39 @@ const issueToken = async (slug: string): Promise<number> => {
   })
 }
 
+/**
+ * Issues the permanent identity for one school, once.
+ *
+ * Refuses to overwrite an existing id, and says so rather than helping: an operator who thinks a
+ * school needs a new identity is either looking at a rename -- which is not a new school -- or at
+ * a school leaving and a different one arriving, which is a removal and an addition.
+ */
+const issueIdentity = async (slug: string): Promise<number> => {
+  return withRegistryLock(registryPath(), async () => {
+    const { entries, index } = await requireRegistryEntry(slug)
+    const current = entries[index]!
+    if (current.schoolId !== undefined) {
+      console.error(
+        `${slug} already has the identity ${current.schoolId}. It is permanent: a rename, a new ` +
+          'slug or a new host all keep it. Remove and re-add the school only if it is genuinely a different school.',
+      )
+      return 1
+    }
+
+    const schoolId = issueSchoolId({ demo: current.demo === true })
+    entries[index] = { ...current, schoolId }
+    await saveRegistry(registryPath(), entries)
+
+    console.log(`${slug}: identity issued`)
+    console.log(schoolId)
+    console.log(
+      'Configure exactly this value on the school deployment, so its v1 summary and ' +
+        '/.well-known/hsclubs-app.json publish the same identity.',
+    )
+    return 0
+  })
+}
+
 const verifyOne = async (slug: string): Promise<number> => {
   return withRegistryLock(registryPath(), async () => {
     const { entries, index } = await requireRegistryEntry(slug)
@@ -443,6 +478,9 @@ const main = async (): Promise<number> => {
       return verifyOnePass()
     case 'verify:watch':
       return verifyWatch()
+    case 'id:issue':
+      if (!argument) throw new Error('Usage: npm run id:issue -- <slug>')
+      return issueIdentity(argument)
     case 'contracts:check':
       return checkContracts()
     case 'contracts:manifest':

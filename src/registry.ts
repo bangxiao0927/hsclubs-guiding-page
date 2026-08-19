@@ -1,6 +1,8 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
+import { isSchoolId, SCHOOL_ID_PATTERN } from './schoolId.js'
+
 /**
  * The school list, as described in docs/REGISTRY.md.
  *
@@ -12,6 +14,14 @@ export type VerificationState = 'pending' | 'verified' | 'failing'
 
 export interface SchoolEntry {
   slug: string
+  /**
+   * The permanent identity this registry issued, or absent for a school that predates it.
+   *
+   * Absent is a supported state during the migration: a school with no id is polled and listed
+   * exactly as before, it simply cannot appear on the v1 app surface yet. Once issued, the value
+   * never changes -- see docs/REGISTRY.md and contracts/v1/README.md.
+   */
+  schoolId?: string
   summaryUrl: string
   verification: {
     token: string | null
@@ -21,6 +31,21 @@ export interface SchoolEntry {
     state: VerificationState
   }
   listed: boolean
+  /**
+   * What the last identity check saw at this school's `/.well-known/hsclubs-app.json`.
+   *
+   * Kept beside verification because it is the same kind of thing -- operational state an
+   * operator acts on -- but deliberately separate from it: verification answers "does this
+   * origin belong to this school", the manifest answers "which identity and which contracts does
+   * that origin publish". A school can be verified and not yet upgraded, and that is normal
+   * during the migration rather than a fault.
+   */
+  integration?: {
+    checkedAt: string | null
+    /** 'ok', or the ManifestProblem from src/manifest.ts. */
+    state: string
+    detail: string | null
+  }
   /**
    * A fixture used to exercise the multi-school UI, not a participating school.
    *
@@ -55,6 +80,11 @@ const parseEntry = (raw: unknown, index: number): SchoolEntry => {
     throw new RegistryError(`${where}.slug must be lowercase letters, digits or hyphens`)
   }
 
+  const schoolId = raw['schoolId']
+  if (schoolId !== undefined && schoolId !== null && !isSchoolId(schoolId)) {
+    throw new RegistryError(`${where}.schoolId must match ${SCHOOL_ID_PATTERN.source}`)
+  }
+
   const summaryUrl = raw['summaryUrl']
   if (typeof summaryUrl !== 'string') {
     throw new RegistryError(`${where}.summaryUrl must be a string`)
@@ -86,9 +116,11 @@ const parseEntry = (raw: unknown, index: number): SchoolEntry => {
   const listed = raw['listed']
   const demo = raw['demo']
   const location = parseLocation(raw['location'], where)
+  const integration = isRecord(raw['integration']) ? raw['integration'] : null
 
   return {
     slug,
+    ...(isSchoolId(schoolId) ? { schoolId } : {}),
     summaryUrl,
     verification: {
       token: typeof token === 'string' ? token : null,
@@ -102,6 +134,16 @@ const parseEntry = (raw: unknown, index: number): SchoolEntry => {
     listed: listed === undefined ? true : listed === true,
     demo: demo === true,
     ...(location ? { location } : {}),
+    ...(integration && typeof integration['state'] === 'string'
+      ? {
+          integration: {
+            checkedAt:
+              typeof integration['checkedAt'] === 'string' ? integration['checkedAt'] : null,
+            state: integration['state'],
+            detail: typeof integration['detail'] === 'string' ? integration['detail'] : null,
+          },
+        }
+      : {}),
   }
 }
 
@@ -130,11 +172,24 @@ export const parseRegistry = (raw: unknown): SchoolEntry[] => {
 
   const entries = schools.map(parseEntry)
   const seen = new Set<string>()
+  const seenIds = new Map<string, string>()
   for (const entry of entries) {
     if (seen.has(entry.slug)) {
       throw new RegistryError(`registry has two schools with the slug ${entry.slug}`)
     }
     seen.add(entry.slug)
+    // Two schools sharing an identity is worse than a missing one: every consumer keys caches,
+    // stored selections and sessions on it, so the collision has to stop the load rather than
+    // become whichever school was polled last.
+    if (entry.schoolId !== undefined) {
+      const owner = seenIds.get(entry.schoolId)
+      if (owner !== undefined) {
+        throw new RegistryError(
+          `registry gives the schoolId ${entry.schoolId} to both ${owner} and ${entry.slug}`,
+        )
+      }
+      seenIds.set(entry.schoolId, entry.slug)
+    }
   }
   return entries
 }
@@ -190,15 +245,35 @@ export const saveRegistry = async (path: string, entries: SchoolEntry[]): Promis
     // `_comment` block the example file itself ships, plus any contact notes an operator added.
     const original = await readRegistryDocument(path)
     const originalSchools = original['schools'] as unknown[]
+    const stored = originalSchools.filter(isRecord)
     const bySlug = new Map(
-      originalSchools
-        .filter(isRecord)
+      stored
         .filter((school) => typeof school['slug'] === 'string')
         .map((school) => [school['slug'] as string, school]),
     )
+    // Identity first, slug second: a rename changes the slug, and matching on it alone would
+    // treat the renamed school as a new one -- losing its operator annotations and, worse,
+    // losing the check below that its identity did not change with its name.
+    const byId = new Map(
+      stored
+        .filter((school) => typeof school['schoolId'] === 'string')
+        .map((school) => [school['schoolId'] as string, school]),
+    )
     const schools = entries.map((entry) => {
-      const before = bySlug.get(entry.slug) ?? {}
+      const before =
+        (entry.schoolId !== undefined ? byId.get(entry.schoolId) : undefined) ??
+        bySlug.get(entry.slug) ??
+        {}
       const beforeVerification = isRecord(before['verification']) ? before['verification'] : {}
+      const issued = before['schoolId']
+      // Identity is write-once. Everything else in an entry is operator state that may be
+      // corrected in place; rewriting an id would silently orphan every cache, stored selection
+      // and session that already refers to it, and nothing downstream could tell it happened.
+      if (typeof issued === 'string' && entry.schoolId !== undefined && entry.schoolId !== issued) {
+        throw new RegistryError(
+          `refusing to change the schoolId of ${entry.slug} from ${issued} to ${entry.schoolId}`,
+        )
+      }
       return {
         ...before,
         ...entry,

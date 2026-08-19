@@ -7,6 +7,7 @@
   "schools": [
     {
       "slug": "mvhs",
+      "schoolId": "sch_7Qb3Xf9KLm2ZpR4tVn6Y",
       "summaryUrl": "https://mvhs.example.org/api/summary",
       "verification": {
         "token": "replace-with-a-one-time-token",
@@ -15,7 +16,12 @@
         "lastError": null,
         "state": "pending"
       },
-      "listed": true
+      "listed": true,
+      "integration": {
+        "checkedAt": null,
+        "state": "absent",
+        "detail": null
+      }
     }
   ]
 }

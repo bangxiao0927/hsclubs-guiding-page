@@ -21,6 +21,7 @@ const SUMMARY = {
   schoolName: 'Mountain View High School',
   shortName: 'MVHS',
   slug: 'mvhs',
+  schoolId: null,
   address: null,
   status: 'active',
   clubCount: 106,

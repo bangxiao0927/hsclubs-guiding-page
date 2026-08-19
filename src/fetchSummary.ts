@@ -14,6 +14,14 @@ export interface FetchOptions {
   timeoutMs?: number
   maxBytes?: number
   fetchImpl?: typeof fetch
+  /**
+   * The identity the registry issued to this school, when it has one.
+   *
+   * A summary that stamps a different id is refused rather than stored: identity drift is how a
+   * school's readers -- caches, stored selections, sessions -- would silently follow a different
+   * school. A summary with no id at all is the unversioned endpoint and stays acceptable.
+   */
+  expectedSchoolId?: string | null
 }
 
 export type FetchResult =
@@ -99,6 +107,12 @@ export const fetchSummary = async (
   if (summary.slug !== expectedSlug) {
     throw new SummaryFetchError(
       `${url.host} claims slug "${summary.slug}", but the registry has "${expectedSlug}"`,
+    )
+  }
+  const expectedSchoolId = options.expectedSchoolId ?? null
+  if (summary.schoolId !== null && expectedSchoolId !== null && summary.schoolId !== expectedSchoolId) {
+    throw new SummaryFetchError(
+      `${url.host} claims schoolId "${summary.schoolId}", but the registry issued "${expectedSchoolId}"`,
     )
   }
 
