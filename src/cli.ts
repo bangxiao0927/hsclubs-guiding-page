@@ -3,6 +3,14 @@ import { fileURLToPath } from 'node:url'
 import { alertsFor, describeAlert, sendAlerts } from './alerts.js'
 import { AlertLog } from './alertLog.js'
 import { staleBuildWarning } from './buildFreshness.js'
+import {
+  computeManifest,
+  loadFixtures,
+  manifestDrift,
+  readManifest,
+  validateContract,
+  MANIFEST_FILE,
+} from './contracts.js'
 import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
 import { saveRegistry, withRegistryLock } from './registry.js'
 import { pageSchools } from './pageData.js'
@@ -28,6 +36,8 @@ import { challengeUrlFor, issueVerificationToken, verifySchool } from './verifyS
  *   npm run verify -- <slug>         check one school's challenge + summary identity
  *   npm run verify:all               re-check every listed school once
  *   npm run verify:watch             re-check now, then monthly by default
+ *   npm run contracts:check          v1 fixtures against v1 schemas, and the shared checksums
+ *   npm run contracts:manifest       rewrite contracts/v1/manifest.json after an edit
  *
  * Registry path from HSCLUBS_REGISTRY (default ./registry.json), store path from HSCLUBS_STORE
  * (default ./data/schools.json). Both are gitignored: the registry carries tokens, the store
@@ -366,6 +376,53 @@ const verifyWatch = async (): Promise<number> => {
   return 0
 }
 
+/**
+ * Checks the shared v1 artifact: every fixture against its schema, and every file against the
+ * recorded checksums.
+ *
+ * Both halves matter. The fixtures prove the schemas say what they mean; the checksums prove the
+ * copies in the school template and the app are this copy, which is the only thing that keeps
+ * three repositories from each fixing a contract bug in their own direction.
+ */
+const checkContracts = (): number => {
+  let failures = 0
+  for (const fixture of loadFixtures()) {
+    const violations = validateContract(fixture.contract, fixture.body)
+    const valid = violations.length === 0
+    if (valid === fixture.expectValid) continue
+    failures += 1
+    console.error(
+      fixture.expectValid
+        ? `${fixture.contract}/${fixture.file}: expected valid, but ${violations
+            .map((violation) => `${violation.path || '/'} ${violation.message}`)
+            .join('; ')}`
+        : `${fixture.contract}/${fixture.file}: expected a violation, but the schema accepted it`,
+    )
+  }
+
+  const drift = manifestDrift(readManifest(), computeManifest())
+  for (const [kind, files] of Object.entries(drift)) {
+    for (const file of files) {
+      failures += 1
+      console.error(`manifest.json is out of date: ${file} ${kind}`)
+    }
+  }
+
+  if (failures > 0) {
+    console.error(`${failures} contract check(s) failed`)
+    return 1
+  }
+  console.log('contracts v1: fixtures and checksums agree')
+  return 0
+}
+
+const writeContractsManifest = async (): Promise<number> => {
+  const { writeFile } = await import('node:fs/promises')
+  await writeFile(MANIFEST_FILE, `${JSON.stringify(computeManifest(), null, 2)}\n`, 'utf8')
+  console.log(`wrote ${MANIFEST_FILE}`)
+  return 0
+}
+
 const main = async (): Promise<number> => {
   const command = process.argv[2]
   const argument = process.argv[3]
@@ -386,9 +443,13 @@ const main = async (): Promise<number> => {
       return verifyOnePass()
     case 'verify:watch':
       return verifyWatch()
+    case 'contracts:check':
+      return checkContracts()
+    case 'contracts:manifest':
+      return writeContractsManifest()
     case undefined:
       console.error(
-        'Usage: npm run poll -- <slug> | npm run poll:all | npm run watch | npm run serve | npm run verify:*',
+        'Usage: npm run poll -- <slug> | npm run poll:all | npm run watch | npm run serve | npm run verify:* | npm run contracts:*',
       )
       return 2
     default:

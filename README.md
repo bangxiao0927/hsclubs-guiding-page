@@ -160,6 +160,7 @@ Caddyfile.
 ```bash
 npm test        # unit tests, plus a real captured response from a running school site
 npm run typecheck
+npm run contracts:check   # the shared v1 schemas, fixtures and checksums
 ```
 
 ## Repository layout (planned)
@@ -168,6 +169,7 @@ npm run typecheck
 | --- | --- |
 | `src/` | The poller (registry, bounded fetch, store, schedule) and the page (render, serve). |
 | `docs/` | The contract, the registry format, and the operating runbook. |
+| `contracts/v1/` | The versioned wire this repo shares with the school template and the iOS app: schemas, fixtures, protocol vectors, checksums. |
 | `registry.example.json` | The shape of the school list. The real one is not in git. |
 
 ## What must never be committed here

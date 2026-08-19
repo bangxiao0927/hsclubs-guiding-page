@@ -1,0 +1,3 @@
+# The shared contract files are checksummed byte for byte in three repositories. A checkout that
+# rewrote their line endings would make every digest disagree with the manifest.
+contracts/v1/** text eol=lf

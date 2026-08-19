@@ -16,6 +16,8 @@
     "verify": "tsx src/cli.ts verify",
     "verify:all": "tsx src/cli.ts verify:all",
     "verify:watch": "tsx src/cli.ts verify:watch",
+    "contracts:check": "tsx src/cli.ts contracts:check",
+    "contracts:manifest": "tsx src/cli.ts contracts:manifest",
     "web:dev": "npm --prefix web run dev",
     "web:build": "npm --prefix web run build",
     "web:test": "npm --prefix web run test",
@@ -26,6 +28,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

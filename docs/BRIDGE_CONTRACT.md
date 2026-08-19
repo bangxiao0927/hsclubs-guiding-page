@@ -6,6 +6,12 @@ version lives with the producer, in the 1st repo's
 and [`docs/API.md`](https://github.com/bangxiao0927/HSclubs/blob/main/docs/API.md); this file is
 the consumer's copy so this repo can be read on its own.
 
+This document describes the unversioned `/api/summary` that is in production today, and it keeps
+describing it: v1 is being built beside it, not on top of it. The versioned contracts the school
+template, this page and the iOS app share -- `/api/v1/summary`,
+`/.well-known/hsclubs-app.json`, `/api/v1/schools` and mobile authentication -- live as machine
+checkable schemas and fixtures in [`../contracts/v1/README.md`](../contracts/v1/README.md).
+
 ## The one endpoint
 
 `GET https://<school-host>/api/summary` -- anonymous, read-only, cross-origin readable.
