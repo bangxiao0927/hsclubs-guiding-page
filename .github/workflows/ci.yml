@@ -18,6 +18,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      # The shared v1 artifact, before anything that depends on it: a schema edit that breaks a
+      # pinned fixture is a cross-repository break, not a local one.
+      - run: npm run contracts:check
       - run: npm test
 
   web:
