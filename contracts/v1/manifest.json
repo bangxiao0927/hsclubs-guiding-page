@@ -2,11 +2,12 @@
   "contract": "hsclubs.contracts",
   "version": 1,
   "files": {
-    "README.md": "8958202b7c4335c68a6dbdab34fb8d9aaf3d9d60ae0bfe49419742b7bf9fa557",
+    "README.md": "1d1e567311e81637c249924a1b5b1860fd2e2866cff9df85cde8ea8d3337d136",
     "fixtures/app-directory/invalid-incompatible-without-reason.json": "30ea162d7cf3d8eb1555e8f8607211c15c4f1788b403c3b17e5c44615f82dc86",
     "fixtures/app-directory/invalid-missing-school-id.json": "970f29cbdddce9348c52565eb714d369ec9265b08e81975de80a46287b7a00ea",
     "fixtures/app-directory/invalid-status-value.json": "0500109567447b8ffaf7feabf283aff15e3bfd7c3df89f0f1646868f579e807f",
     "fixtures/app-directory/valid-empty.json": "e5848924d91c4d8338ee60615c1b5e2967dd33c0145b95e6cf4ee51618c31938",
+    "fixtures/app-directory/valid-incompatible-name-fallback.json": "0624e8f8671540c69276b30eaabb52037eaa45423a8c00e73d149fda047d3176",
     "fixtures/app-directory/valid-mixed.json": "e64054e54d9b42456940b594c1c62cdea760b60e775235e26ccd895a2d7b30f2",
     "fixtures/app-directory/valid-unknown-field.json": "042804e0fed503142fe1d8f5fee26b328fe7566743218466652c0cceda900c8f",
     "fixtures/mobile-auth-callback/invalid-code-and-error.json": "3701f40aa8a4d1d60b723228f2d1711b03cb959bef1a8b4e5616988904a190a6",

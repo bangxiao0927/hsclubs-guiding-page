@@ -121,6 +121,14 @@ describe('error isolation', () => {
       ),
     ).toBe(false)
   })
+
+  it('lets an unnamed school fall back to its slug rather than drop out of the list', () => {
+    const fallback = fixture('app-directory', 'valid-incompatible-name-fallback.json') as {
+      schools: { name: string; slug: string }[]
+    }
+    expect(honoursContract('app-directory', fallback)).toBe(true)
+    expect(fallback.schools[0]?.name).toBe(fallback.schools[0]?.slug)
+  })
 })
 
 describe('identity', () => {

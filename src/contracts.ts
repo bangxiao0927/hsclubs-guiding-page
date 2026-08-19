@@ -169,7 +169,16 @@ export const computeManifest = (): ContractManifest => {
   return { contract: 'hsclubs.contracts', version: CONTRACT_VERSION, files }
 }
 
-export const readManifest = (): ContractManifest => readJson(MANIFEST_FILE) as ContractManifest
+export const readManifest = (): ContractManifest => {
+  try {
+    return readJson(MANIFEST_FILE) as ContractManifest
+  } catch (error) {
+    throw new Error(
+      `could not read ${MANIFEST_FILE}: ${error instanceof Error ? error.message : String(error)}. ` +
+        'Run `npm run contracts:manifest` after editing anything under contracts/.',
+    )
+  }
+}
 
 export interface ManifestDrift {
   added: string[]

@@ -91,6 +91,12 @@ One school's bad data must never cost another school its listing:
   the list.
 - `unavailableReason` is written by the guiding page, never echoed from the failing school, and
   is capped at 200 characters.
+- A school whose summary never validated has no name to show. `name` stays required anyway --
+  the app must not have to render a nameless row -- and the guiding page falls back to the
+  registry slug, as in
+  [`app-directory/valid-incompatible-name-fallback.json`](fixtures/app-directory/valid-incompatible-name-fallback.json).
+  The fallback is the guiding page's own text, so it can never be a string the failing school
+  chose.
 
 ## Mobile authentication
 
