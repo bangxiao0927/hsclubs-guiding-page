@@ -8,6 +8,8 @@ import { honoursContract } from './contracts.js'
 import { fetchSummary } from './fetchSummary.js'
 import { checkIdentity, fetchManifest, manifestUrlFor, type SchoolManifest } from './manifest.js'
 import { parseRegistry, RegistryError, saveRegistry, type SchoolEntry } from './registry.js'
+import { pollSchool } from './pollSchool.js'
+import { emptyRecord } from './store.js'
 import { isDemoSchoolId, isSchoolId, issueSchoolId } from './schoolId.js'
 import { verifySchool } from './verifySchool.js'
 
@@ -190,6 +192,19 @@ describe('summary identity drift', () => {
       expectedSchoolId: ID,
     })
     expect(result.outcome === 'updated' && result.summary.schoolId).toBeNull()
+  })
+
+  // Hourly, not monthly: a school that starts serving another school's summary must not have its
+  // numbers stored and shown until the next verification pass.
+  it('refuses a drifting summary during an ordinary poll, keeping the last good one', async () => {
+    const previous = { ...emptyRecord('mvhs'), lastError: null }
+    const { outcome, record } = await pollSchool(entry(), previous, {
+      fetchImpl: respond(summaryBody({ schoolId: OTHER_ID })),
+    })
+
+    expect(outcome).toBe('failed')
+    expect(record.summary).toEqual(previous.summary)
+    expect(record.lastError).toMatch(/claims schoolId/)
   })
 })
 

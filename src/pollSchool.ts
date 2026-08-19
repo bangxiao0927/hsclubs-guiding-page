@@ -45,6 +45,10 @@ export const pollSchool = async (
     const result = await fetchSummary(entry.summaryUrl, entry.slug, {
       ...options,
       etag: previous.etag,
+      // The hourly poll checks identity too, not just the monthly verification pass. Otherwise a
+      // school that started serving another school's summary would have its numbers stored, and
+      // shown, for up to a month before anything noticed.
+      ...(entry.schoolId !== undefined ? { expectedSchoolId: entry.schoolId } : {}),
     })
 
     if (result.outcome === 'not-modified') {
