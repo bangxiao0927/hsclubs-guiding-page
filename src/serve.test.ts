@@ -107,6 +107,39 @@ describe('the page server', () => {
       expect((await fetch(`${base}/api/v1/schools`)).status).toBe(404)
     })
 
+    it('serves the Apple App Site Association as application/json when configured', async () => {
+      const base = await start({
+        render: () => '<p>ok</p>',
+        appleAppSiteAssociation: () => ({ applinks: { apps: [], details: [] } }),
+      })
+
+      const response = await fetch(`${base}/.well-known/apple-app-site-association`)
+
+      // Apple requires application/json exactly, and no filename extension on the path.
+      expect(response.headers.get('content-type')).toBe('application/json')
+      expect(await response.json()).toEqual({ applinks: { apps: [], details: [] } })
+    })
+
+    it('answers the association 404 when no app id is configured', async () => {
+      const base = await start({ render: () => '<p>ok</p>', appleAppSiteAssociation: () => null })
+
+      expect((await fetch(`${base}/.well-known/apple-app-site-association`)).status).toBe(404)
+    })
+
+    it('serves the mobile-auth fallback without reflecting the query it was called with', async () => {
+      const base = await start({
+        render: () => '<p>ok</p>',
+        mobileAuthFallback: () => '<!doctype html><title>Return to the app</title>',
+      })
+
+      const response = await fetch(`${base}/mobile-auth/callback?code=secret&state=xyz`)
+
+      expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8')
+      const body = await response.text()
+      expect(body).not.toContain('secret')
+      expect(body).not.toContain('xyz')
+    })
+
     it('reports a failure to build the payload as a 500, not a crash', async () => {
       const base = await start({
         render: () => '<p>ok</p>',

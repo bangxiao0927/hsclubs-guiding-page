@@ -69,6 +69,11 @@ npm run web:test   # the app's own tests
 localhost unless told otherwise. Public access, when wanted, belongs in a TLS reverse proxy --
 not in a Node listener that also has access to the operated registry and store.
 
+`HSCLUBS_IOS_APP_ID` (a production `TEAMID.bundleid`) makes this domain publish the iOS app's
+Universal Link association at `/.well-known/apple-app-site-association`; unset, that path is 404
+rather than a placeholder. The static fallback at `/mobile-auth/callback` is always served and
+consumes nothing. See [`contracts/v1/README.md`](contracts/v1/README.md) and hsclubs-app#2.
+
 A school that stops answering is reported once, not hourly. After `HSCLUBS_ALERT_AFTER` failed
 polls in a row (3 by default) the pass prints `ALERT: ...` and, if `HSCLUBS_ALERT_WEBHOOK` is
 set, posts one JSON body there; recovery is reported the same way. Alerts fire on transitions
