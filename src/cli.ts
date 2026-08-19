@@ -11,7 +11,7 @@ import {
   validateContract,
   MANIFEST_FILE,
 } from './contracts.js'
-import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
+import { loadRegistry, loadRegistryForServing, pollableSchools, type SchoolEntry } from './registry.js'
 import { saveRegistry, withRegistryLock } from './registry.js'
 import { buildAppDirectory } from './appDirectory.js'
 import { LegacyUsage } from './legacyUsage.js'
@@ -53,6 +53,7 @@ import { challengeUrlFor, issueVerificationToken, verifySchool } from './verifyS
 const registryPath = () => process.env['HSCLUBS_REGISTRY'] ?? 'registry.json'
 const storePath = () => process.env['HSCLUBS_STORE'] ?? 'data/schools.json'
 const alertPath = () => process.env['HSCLUBS_ALERT_STORE'] ?? 'data/alerts.json'
+const usagePath = () => process.env['HSCLUBS_USAGE_STORE'] ?? 'data/usage.json'
 
 /**
  * A misread number here reaches other people's servers: `HSCLUBS_POLL_INTERVAL_MS=1h` is NaN,
@@ -213,15 +214,24 @@ const serve = async (): Promise<number> => {
   // written and there is no output file to keep in sync.
   const read = async () => {
     const [entries, store] = await Promise.all([
-      loadRegistry(registryPath()),
+      // Lenient on the serving path: one malformed or duplicated registry entry is dropped, not
+      // allowed to 500 the whole directory and page.
+      loadRegistryForServing(registryPath()),
       SchoolStore.open(storePath()),
     ])
     return { entries, store }
   }
 
-  // Legacy-usage metrics live for the lifetime of the server process; the observation window is
-  // long, but any read is enough to answer "is the legacy path still in use?".
-  const usage = new LegacyUsage()
+  // Legacy-usage metrics are loaded from disk so the observation window survives restarts, and
+  // flushed periodically and on shutdown. Any read is enough to answer "is the legacy path in
+  // use?"; the numbers only ever grow.
+  const usage = await LegacyUsage.open(usagePath())
+  const flushUsage = () =>
+    usage.persist(usagePath()).catch((error) =>
+      console.error(`Could not persist usage metrics: ${error instanceof Error ? error.message : String(error)}`),
+    )
+  const usageFlush = setInterval(() => void flushUsage(), 60_000)
+  usageFlush.unref?.()
 
   const server = createPageServer({
     port: pagePort(),
@@ -284,7 +294,8 @@ const serve = async (): Promise<number> => {
     for (const signal of ['SIGINT', 'SIGTERM'] as const) {
       process.on(signal, () => {
         console.log(`\n${signal} received, closing`)
-        server.close(() => resolve())
+        clearInterval(usageFlush)
+        void flushUsage().finally(() => server.close(() => resolve()))
       })
     }
   })
