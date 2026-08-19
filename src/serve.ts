@@ -26,6 +26,16 @@ export interface ServeOptions {
   appApi?: () => Promise<unknown> | unknown
   /** Operational state and recent alert transitions behind GET /api/status. */
   statusApi?: () => Promise<unknown> | unknown
+  /**
+   * The Apple App Site Association JSON, or null when no production app id is configured.
+   *
+   * A function so the server can be built before the app id is known, and so an unconfigured
+   * deployment answers 404 rather than serving a placeholder association that would let the
+   * wrong build claim the callback.
+   */
+  appleAppSiteAssociation?: () => unknown | null
+  /** The static fallback page for GET /mobile-auth/callback. */
+  mobileAuthFallback?: () => string
   /** Directory of built assets, if one has been built. */
   staticDir?: string | null
 }
@@ -80,6 +90,8 @@ export const createPageServer = ({
   api,
   appApi,
   statusApi,
+  appleAppSiteAssociation,
+  mobileAuthFallback,
   staticDir = null,
   host = '127.0.0.1',
   port = 4180,
@@ -97,6 +109,41 @@ export const createPageServer = ({
       res.end(
         `Could not render the page: ${error instanceof Error ? error.message : String(error)}\n`,
       )
+    }
+
+    // The Apple App Site Association: application/json, no extension, and safe to cache for a
+    // short while. Served only when an app id is configured; otherwise 404, never a placeholder.
+    if (path === '/.well-known/apple-app-site-association') {
+      const association = appleAppSiteAssociation?.()
+      if (!association) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found\n')
+        return
+      }
+      const body = JSON.stringify(association)
+      res.writeHead(200, {
+        'content-type': 'application/json',
+        'content-length': Buffer.byteLength(body),
+        'cache-control': 'public, max-age=3600',
+      })
+      res.end(head ? undefined : body)
+      return
+    }
+
+    // The Universal Link fallback. Static, and it must stay static: it never reads the query, so
+    // a one-time code that lands here instead of in the app is shown to no one and expires.
+    if (path === '/mobile-auth/callback') {
+      if (!mobileAuthFallback) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('Not found\n')
+        return
+      }
+      const body = mobileAuthFallback()
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'content-length': Buffer.byteLength(body),
+        'cache-control': 'no-store',
+      })
+      res.end(head ? undefined : body)
+      return
     }
 
     if (path === '/api/schools' || path === '/api/v1/schools' || path === '/api/status') {

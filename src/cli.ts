@@ -14,6 +14,7 @@ import {
 import { loadRegistry, pollableSchools, type SchoolEntry } from './registry.js'
 import { saveRegistry, withRegistryLock } from './registry.js'
 import { buildAppDirectory } from './appDirectory.js'
+import { buildAppleAppSiteAssociation, renderMobileAuthFallback } from './mobileAuthCallback.js'
 import { issueSchoolId } from './schoolId.js'
 import { pageSchools } from './pageData.js'
 import { buildPayload } from './pagePayload.js'
@@ -227,6 +228,10 @@ const serve = async (): Promise<number> => {
       const { entries, store } = await read()
       return buildAppDirectory(entries, store)
     },
+    // The official domain (clubs.bangxiao.net) hosts the app's Universal Link return channel.
+    // The app id comes from the deployment; without it, no association is published.
+    appleAppSiteAssociation: () => buildAppleAppSiteAssociation(process.env['HSCLUBS_IOS_APP_ID'] ?? null),
+    mobileAuthFallback: renderMobileAuthFallback,
     statusApi: async () => {
       const [store, alerts] = await Promise.all([
         SchoolStore.open(storePath()),
