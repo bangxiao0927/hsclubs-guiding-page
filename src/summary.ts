@@ -11,6 +11,15 @@ export interface SchoolSummary {
   schoolName: string
   shortName: string | null
   slug: string
+  /**
+   * The permanent identity the school stamps on its own summary, or null on the unversioned
+   * endpoint that predates it.
+   *
+   * Read but not required: `/api/summary` is still the production contract and carries no id.
+   * When it is present it is checked against the registry, because a school claiming an identity
+   * that is not its own is the one identity error that must never be stored.
+   */
+  schoolId: string | null
   address: string | null
   status: string | null
   clubCount: number
@@ -22,6 +31,8 @@ export interface SchoolSummary {
 }
 
 export class SummaryFormatError extends Error {}
+
+const SCHOOL_ID = /^sch_[A-Za-z0-9]{16,48}$/
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -78,6 +89,15 @@ const optionalInstant = (source: Record<string, unknown>, field: string): string
   return value
 }
 
+const optionalSchoolId = (source: Record<string, unknown>): string | null => {
+  const value = source['schoolId']
+  if (value === undefined || value === null) return null
+  if (typeof value !== 'string' || !SCHOOL_ID.test(value)) {
+    throw new SummaryFormatError('summary.schoolId must be an opaque sch_ identifier')
+  }
+  return value
+}
+
 /** @throws SummaryFormatError if the body is not a summary this page can rely on */
 export const parseSummary = (body: unknown): SchoolSummary => {
   if (!isRecord(body)) {
@@ -87,6 +107,7 @@ export const parseSummary = (body: unknown): SchoolSummary => {
     schoolName: requireString(body, 'schoolName'),
     shortName: optionalString(body, 'shortName'),
     slug: requireString(body, 'slug'),
+    schoolId: optionalSchoolId(body),
     address: optionalString(body, 'address'),
     status: optionalString(body, 'status'),
     clubCount: requireCount(body, 'clubCount'),

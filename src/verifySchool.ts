@@ -2,6 +2,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 
 import { discardResponse, readBoundedText } from './boundedResponse.js'
 import { fetchSummary, SummaryFetchError, type FetchOptions } from './fetchSummary.js'
+import { fetchManifest, type ManifestOptions, type ManifestResult } from './manifest.js'
 import type { SchoolEntry } from './registry.js'
 import { SummaryFormatError } from './summary.js'
 
@@ -23,6 +24,17 @@ export interface VerificationResult {
   /** The check could not finish, but did not disprove a previous verification. */
   transientFailure: boolean
 }
+
+/**
+ * A manifest problem that revokes verification rather than being recorded and moved past.
+ *
+ * An origin publishing another school's identity, or a school's own document pointing somewhere
+ * else, is the case where continuing to list the school would carry the mistake into every
+ * consumer. Everything else -- no manifest yet, unreachable, malformed, a stale slug -- is
+ * recorded and the school stays as it was, because the migration is precisely the period when a
+ * verified school has not published a manifest yet.
+ */
+const REVOKING_PROBLEMS = new Set(['id-mismatch', 'origin-mismatch'])
 
 class DefinitiveVerificationError extends Error {}
 
@@ -140,13 +152,28 @@ export const verifySchool = async (
     const summaryOptions: FetchOptions = {}
     if (options.fetchImpl) summaryOptions.fetchImpl = options.fetchImpl
     if (options.timeoutMs !== undefined) summaryOptions.timeoutMs = options.timeoutMs
+    if (entry.schoolId !== undefined) summaryOptions.expectedSchoolId = entry.schoolId
     await fetchSummary(entry.summaryUrl, entry.slug, summaryOptions)
+
+    // The identity claim is read last: it is the only check that can be inconclusive without the
+    // school being at fault, so it must not shadow a challenge or summary failure.
+    const manifestOptions: ManifestOptions = {}
+    if (options.fetchImpl) manifestOptions.fetchImpl = options.fetchImpl
+    if (options.timeoutMs !== undefined) manifestOptions.timeoutMs = options.timeoutMs
+    const manifest = await fetchManifest(entry, manifestOptions)
+    const integration = describeIntegration(manifest, checkedAt)
+
+    if (manifest.outcome === 'problem' && REVOKING_PROBLEMS.has(manifest.problem)) {
+      const failure = failed(entry, checkedAt, new DefinitiveVerificationError(manifest.detail))
+      return { ...failure, entry: { ...failure.entry, integration } }
+    }
 
     return {
       verified: true,
       transientFailure: false,
       entry: {
         ...entry,
+        integration,
         verification: {
           ...entry.verification,
           state: 'verified',
@@ -160,3 +187,11 @@ export const verifySchool = async (
     return failed(entry, checkedAt, error)
   }
 }
+
+const describeIntegration = (
+  result: ManifestResult,
+  checkedAt: string,
+): NonNullable<SchoolEntry['integration']> =>
+  result.outcome === 'ok'
+    ? { checkedAt, state: 'ok', detail: null }
+    : { checkedAt, state: result.problem, detail: result.detail }
