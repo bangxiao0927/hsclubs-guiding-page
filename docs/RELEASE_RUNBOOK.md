@@ -38,8 +38,22 @@ skipped:
   the redirect), which is why the entitlement change above is the real fix.
 - **The school's origin changed, so its verification is stale.** Origin verification proves
   control of a host; `mvhs.hsclubs.net` is a different host from `hsclubs.net`. Point the registry
-  entry at the new summary URL, publish the challenge file on the new origin, and re-run
-  `npm run verify -- <slug>` before expecting the school back in the directory.
+  entry at the new summary URL and re-run `npm run verify -- <slug>` before expecting the school
+  back in the directory. The challenge token travels with the school's build, so it only has to be
+  served on the new host, not republished by hand.
+
+The registry/store rename is scripted so the slug, the cached store key and the alert history move
+together. Stop `npm run watch` and `npm run serve` first, then inspect and apply:
+
+```bash
+npm run school:rename              # dry-run: hsclubs -> mvhs
+npm run school:rename -- --apply   # write the rename and back up the three files
+npm run verify -- mvhs             # re-prove the new host
+```
+
+Only run `--verify` when DNS and the school deployment are already live on the new host; the
+registry edit is what makes `verify` fetch the new origin, so the check cannot pass before the
+origin does.
 
 ## Per-school acceptance, before the app ships
 
