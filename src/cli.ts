@@ -246,7 +246,7 @@ const serve = async (): Promise<number> => {
       return buildAppDirectory(entries, store)
     },
     recordApiHit: (route) => usage.record(route),
-    // The official domain (clubs.bangxiao.net) hosts the app's Universal Link return channel.
+    // The official domain (hsclubs.net) hosts the app's Universal Link return channel.
     // The app id comes from the deployment; without it, no association is published.
     appleAppSiteAssociation: () => buildAppleAppSiteAssociation(process.env['HSCLUBS_IOS_APP_ID'] ?? null),
     mobileAuthFallback: renderMobileAuthFallback,

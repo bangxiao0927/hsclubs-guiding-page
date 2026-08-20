@@ -153,7 +153,7 @@ repository, so a reboot brings the page back without anyone logging in. The serv
 binds to localhost; Caddy is the only process that answers the public network.
 
 ```bash
-https://clubs.bangxiao.net              # public directory
+https://hsclubs.net                              # public directory
 ssh -N -L 4180:127.0.0.1:4180 you@that-machine   # direct operator tunnel, if needed
 ```
 

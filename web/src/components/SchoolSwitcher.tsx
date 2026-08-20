@@ -97,7 +97,7 @@ export const SchoolSwitcher = ({
             </span>
             <span className="min-w-0 flex-1">
               <span className="font-display block font-bold">HS Clubs Guide</span>
-              <span className="block truncate text-xs text-[var(--text-faint)]">clubs.bangxiao.net</span>
+              <span className="block truncate text-xs text-[var(--text-faint)]">hsclubs.net</span>
             </span>
             <span className="rounded-full bg-[var(--accent)]/10 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-[0.08em] text-[var(--accent)]">
               Current
