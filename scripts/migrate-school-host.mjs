@@ -202,9 +202,18 @@ const applyChanges = async (options) => {
   console.log(`Backups are in ${backupPath(REGISTRY, stamp)}, ${backupPath(STORE, stamp)}, ${backupPath(ALERTS, stamp)}.`)
 
   if (options.verify) {
-    const command = process.platform === 'win32' ? 'npm.cmd' : 'npm'
     console.log(`\nRe-verifying ${newSlug} on its new host...`)
-    const result = spawnSync(command, ['run', 'verify', '--', newSlug], { stdio: 'inherit' })
+    // Node cannot spawn a .cmd shim directly on every Windows release. Go through cmd.exe there;
+    // POSIX keeps the direct exec path so no shell is involved when it is not needed.
+    const windows = process.platform === 'win32'
+    const result = spawnSync('npm', ['run', 'verify', '--', newSlug], {
+      stdio: 'inherit',
+      shell: windows,
+    })
+    if (result.error) {
+      console.error(`\nCould not start verification: ${result.error.message}`)
+      process.exit(1)
+    }
     if (result.status !== 0) {
       console.error(`\nVerification did not succeed (exit ${result.status ?? 'signal'}). Fix it before restarting the watcher.`)
       process.exit(result.status ?? 1)
