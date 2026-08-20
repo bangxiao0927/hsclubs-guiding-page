@@ -1,14 +1,14 @@
 /**
  * The two things the official domain publishes so the iOS app's system sign-in can return
- * safely: the Apple App Site Association that turns `https://clubs.bangxiao.net/mobile-auth/
- * callback` into a Universal Link, and the fallback page a browser sees when the app is not
- * installed.
+ * safely: the Apple App Site Association that turns `https://hsclubs.net/mobile-auth/callback`
+ * into a Universal Link, and the fallback page a browser sees when the app is not installed.
  *
- * The domain is this guiding page (clubs.bangxiao.net), which is why these live here rather than
- * on a school site. See hsclubs-app#2. The callback carries a one-time authorization code as a
- * query parameter; the whole security argument for the fallback is that it does nothing with it
- * -- it never reads, displays, forwards or stores the query, so a code that lands in a browser
- * instead of the app simply expires unused.
+ * The domain is this guiding page (hsclubs.net -- the apex, which the directory moved onto when
+ * the school site took mvhs.hsclubs.net), which is why these live here rather than on a school
+ * site. See hsclubs-app#2. The callback carries a one-time authorization code as a query
+ * parameter; the whole security argument for the fallback is that it does nothing with it -- it
+ * never reads, displays, forwards or stores the query, so a code that lands in a browser instead
+ * of the app simply expires unused.
  */
 export const MOBILE_AUTH_CALLBACK_PATH = '/mobile-auth/callback'
 export const AASA_PATH = '/.well-known/apple-app-site-association'

@@ -13,11 +13,33 @@ Compatibility flows one way, so the producers ship before the consumers:
    unchanged.
 2. **Guiding page** — poll and verify each school's identity and manifest, publish
    `/api/v1/schools`, and serve the Universal Link association and fallback on
-   `clubs.bangxiao.net`. `/api/schools` is unchanged.
+   `hsclubs.net`. `/api/schools` is unchanged.
 3. **iOS app** — only after every real school passes the checks below.
 
 A school may be at step 1 while another is not; the guiding page lists each independently and marks
 the laggard `degraded` or `incompatible` without affecting the rest.
+
+## The 2026-08 domain move
+
+The directory used to answer on `clubs.bangxiao.net` and the first school site owned the apex
+`hsclubs.net`. That is now the other way round: the directory is the apex (`hsclubs.net`) and the
+first school sits on `mvhs.hsclubs.net`, so every later school is a subdomain of the same name
+rather than of a personal domain. Three consequences, all of which are release-blocking if
+skipped:
+
+- **The Universal Link domain changed.** The association is now served from `hsclubs.net`, so the
+  app's associated-domains entitlement must name `applinks:hsclubs.net` and each school's
+  `APP_MOBILE_AUTH_CALLBACK_URLS` must allow `https://hsclubs.net/mobile-auth/callback`. An app
+  build entitled only to the old host silently falls through to the browser fallback. Ship the
+  school allow-list first, then the app.
+- **Keep the old host resolving.** `clubs.bangxiao.net` should 301 to `hsclubs.net` for as long as
+  any released app build or bookmark can still reach for it. A redirect does *not* rescue a
+  Universal Link (iOS matches the association against the host it was given, and does not follow
+  the redirect), which is why the entitlement change above is the real fix.
+- **The school's origin changed, so its verification is stale.** Origin verification proves
+  control of a host; `mvhs.hsclubs.net` is a different host from `hsclubs.net`. Point the registry
+  entry at the new summary URL, publish the challenge file on the new origin, and re-run
+  `npm run verify -- <slug>` before expecting the school back in the directory.
 
 ## Per-school acceptance, before the app ships
 
@@ -30,7 +52,7 @@ Every real school must pass, in order (demo schools are shown but excluded from 
 3. **Root page** — the school site loads over its verified https origin.
 4. **v1 summary** — `/api/v1/summary` validates and carries the issued id.
 5. **v1 directory** — the school appears `compatible` in `/api/v1/schools`.
-6. **Universal Link** — `clubs.bangxiao.net/.well-known/apple-app-site-association` names the
+6. **Universal Link** — `hsclubs.net/.well-known/apple-app-site-association` names the
    production app id and the callback path.
 7. **Google sign-in** — a dedicated test account completes the flow on staging.
 8. **Session recovery** — after quitting and reopening the app, the school session is still valid.

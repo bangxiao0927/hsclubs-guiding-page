@@ -57,7 +57,7 @@ export const describeAge = (from: string | null, now: Date): string => {
 const plural = (count: number, unit: string): string =>
   `${count} ${unit}${count === 1 ? '' : 's'} ago`
 
-/** Only the host, so a card shows "hsclubs.net" rather than a full URL nobody reads. */
+/** Only the host, so a card shows "mvhs.hsclubs.net" rather than a full URL nobody reads. */
 const hostOf = (siteUrl: string): string => {
   try {
     return new URL(siteUrl).host
