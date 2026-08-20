@@ -16,6 +16,7 @@
     "verify": "tsx src/cli.ts verify",
     "verify:all": "tsx src/cli.ts verify:all",
     "verify:watch": "tsx src/cli.ts verify:watch",
+    "school:rename": "node scripts/migrate-school-host.mjs",
     "id:issue": "tsx src/cli.ts id:issue",
     "release:check": "tsx src/cli.ts release:check",
     "contracts:check": "tsx src/cli.ts contracts:check",
