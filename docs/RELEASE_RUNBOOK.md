@@ -32,10 +32,10 @@ skipped:
   `APP_MOBILE_AUTH_CALLBACK_URLS` must allow `https://hsclubs.net/mobile-auth/callback`. An app
   build entitled only to the old host silently falls through to the browser fallback. Ship the
   school allow-list first, then the app.
-- **Keep the old host resolving.** `clubs.bangxiao.net` should 301 to `hsclubs.net` for as long as
-  any released app build or bookmark can still reach for it. A redirect does *not* rescue a
-  Universal Link (iOS matches the association against the host it was given, and does not follow
-  the redirect), which is why the entitlement change above is the real fix.
+- **The old host is retired, not redirected.** `clubs.bangxiao.net` intentionally has no DNS
+  record and must not appear in deployment config. `hsclubs.net` is the only supported guiding
+  page and Universal Link origin. A redirect would not rescue an old Universal Link anyway: iOS
+  matches the association against the host it was given and does not follow the redirect.
 - **The school's origin changed, so its verification is stale.** Origin verification proves
   control of a host; `mvhs.hsclubs.net` is a different host from `hsclubs.net`. Point the registry
   entry at the new summary URL and re-run `npm run verify -- <slug>` before expecting the school
